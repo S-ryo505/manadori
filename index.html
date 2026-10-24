@@ -203,7 +203,7 @@ h2{font-size:17px;margin:24px 6px 4px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.3.0";
+const APP_VER = "1.3.1";
 const KEY = "manadori:v1";
 const INTERVALS = [0, 1, 3, 7, 14, 30];
 const SUBJECTS = ["社会", "英語", "理科"];
@@ -668,7 +668,8 @@ function renderQuiz(){
      <div class="progress"><i style="width:${Math.round(session.i/total*100)}%"></i></div><span class="muted">${session.i+1}/${total}</span></div>`;
   const tags=`<div style="display:flex;gap:6px;flex-wrap:wrap">${kindPill(q)}<span class="pill">${esc(q.unit)} ${esc(q.sec||"")}</span>
      ${q.star?`<span class="pill star">★ マーカー</span>`:""}${q.retry?`<span class="pill" style="background:var(--ng-soft);color:var(--ng)">もう一度</span>`:""}</div>`;
-  const sayFirst = q.say && (q.listen || (q.type==="choice" && (q.mode ? q.sayBefore : true)));
+  // 答える前に出すのは「聞き取り」と「英語→意味（読み）」のボタンだけ。自動では鳴らさない
+  const sayFirst = q.say && (q.listen || q.mode==="read");
   const qhead = imgTag(q) + (q.mode==="read"
       ? `<div class="q">${qtext(q.q)}</div><div class="word ans-en">${esc(q.word)}</div>`
       : `<div class="q ${isEn(q.q)&&!hasJa(q.q)?"ans-en":""}">${qtext(q.q)}</div>`)
@@ -746,7 +747,6 @@ function renderQuiz(){
   const inp=$("#inp");
   if(inp){ if(!q.listen) inp.focus(); inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ q.type==="calc"?calcSubmit():termSubmit(); }}); }
   if($("#pad")) padInit();
-  if(sayFirst && !st.played && !st.done){ st.played=true; const b=$(".speak"); setTimeout(()=>speak(q.say,false,b),300); }
   if(st.done && !st.autoPlayed && q.say){ st.autoPlayed=true; setTimeout(()=>speakSeq([q.say, q.vocab&&q.vocab.ex]),250); }   // 答え合わせのときは必ず読む
 }
 function pickChoice(i){ const st=session.state, q=curQ(); st.pick=st.opts[i]; answerQ(st.pick===q.a,"",st.hint); }
