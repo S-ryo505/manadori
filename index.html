@@ -161,6 +161,12 @@ h2{font-size:17px;margin:24px 6px 4px}
 .mode input{margin-top:4px;accent-color:var(--pri);width:20px;height:20px;flex:none}
 .steps{margin:8px 0 0;padding-left:1.3em;font-size:14px;color:var(--sub)}
 .subj{font-size:13px;color:rgba(255,255,255,.95);margin-top:2px}
+.excard{margin-top:12px;padding:12px 14px;border-radius:18px;background:var(--card);border:2.5px dashed var(--pri-soft)}
+.excard .exen{font-size:18px;font-weight:700;margin-top:2px;line-height:1.5}
+.excard .exja{font-size:14px;color:var(--sub);margin-top:2px}
+.excard .hl{color:var(--pri-deep);background:linear-gradient(transparent 60%,var(--pri-soft) 60%)}
+@media (prefers-color-scheme:dark){.excard .hl{color:var(--pri)}}
+.warn{background:var(--ng-soft);border:2px solid var(--ng)}
 /* トップページ */
 .greet{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
 .bubble{flex:1;background:var(--card);border-radius:22px;padding:12px 16px;box-shadow:var(--shadow);position:relative;font-weight:700}
@@ -197,7 +203,7 @@ h2{font-size:17px;margin:24px 6px 4px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.2.0";
+const APP_VER = "1.3.0";
 const KEY = "manadori:v1";
 const INTERVALS = [0, 1, 3, 7, 14, 30];
 const SUBJECTS = ["社会", "英語", "理科"];
@@ -288,6 +294,7 @@ function allQ(subj){
   return out;
 }
 function subjectsAll(){ const s=new Set(SUBJECTS); Object.values(SETS).forEach(x=>s.add(x.subject)); return [...s]; }
+function missingImg(setId){ const s=SETS[setId]; return !!s && s.questions.some(q=>q.img && !(s.images&&s.images[q.img])); }
 function imgOf(q){ const s=SETS[q.setId]; return q.img && s && s.images ? s.images[q.img] : null; }
 function prog(id){ return DB.prog[id]; }
 function boxOf(id){ const p=DB.prog[id]; return p?p.box:0; }
@@ -409,18 +416,27 @@ function pickVoice(){ try{ const vs=speechSynthesis.getVoices(); enVoice=vs.find
 if("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
 function findAudio(text){ for(const s of Object.values(SETS)){ if(s.audio && s.audio[text]) return s.audio[text]; } return null; }
 function stopSound(){ try{ if(curAudio){ curAudio.pause(); curAudio=null; } }catch(e){} if(curBtn){ curBtn.classList.remove("playing"); curBtn=null; } }
-function speak(text, slow, btn){
+function speak(text, slow, btn, onEnd){
   stopSound();
   if(btn){ curBtn=btn; btn.classList.add("playing"); }
-  const done=()=>{ if(btn) btn.classList.remove("playing"); };
+  let fired=false; const done=()=>{ if(btn) btn.classList.remove("playing"); if(!fired){ fired=true; onEnd&&onEnd(); } };
   const src=findAudio(text);
   if(src){
     const a=new Audio(src); curAudio=a; a.playbackRate=slow?0.7:1; a.preservesPitch=true;
-    a.onended=done; a.onerror=()=>{ done(); ttsSpeak(text,slow); };
-    a.play().catch(()=>{ done(); ttsSpeak(text,slow); });
+    a.onended=done; a.onerror=()=>ttsSpeak(text,slow,done);
+    a.play().catch(()=>ttsSpeak(text,slow,done));
     return;
   }
   ttsSpeak(text, slow, done);
+}
+let SEQ=0;
+function stopAll(){ SEQ++; stopSound(); try{ speechSynthesis.cancel(); }catch(e){} }
+function speakSeq(list){   // 単語 → 例文 のように続けて読む
+  const l=list.filter(Boolean), my=++SEQ; let i=0;
+  const nx=()=>{ if(my!==SEQ || i>=l.length) return; const t=l[i++];
+    const btn=document.querySelector(`.speak[data-say="${CSS.escape(encodeURIComponent(t))}"]`);
+    speak(t,false,btn,()=>setTimeout(nx,450)); };
+  nx();
 }
 function ttsSpeak(text, slow, done){
   if(!("speechSynthesis" in window)){ toast("音が出ないときは、スマホの音量とマナーモードを確認してね"); done&&done(); return; }
@@ -435,6 +451,18 @@ function sayBtns(text, huge){
     ? `<button class="speak huge" data-say="${t}" onclick="speak(decodeURIComponent(this.dataset.say),false,this)">🔊 聞く</button>
        <button class="speak slow" data-say="${t}" onclick="speak(decodeURIComponent(this.dataset.say),true,this)">🐢 ゆっくり</button>`
     : `<button class="speak" data-say="${t}" onclick="speak(decodeURIComponent(this.dataset.say),false,this)">🔊 発音を聞く</button>`;
+}
+
+/* ---------- 英単語の例文 ---------- */
+function exCard(q){
+  const v=q.vocab; if(!v||!v.ex) return "";
+  const key=v.en.split(" ")[0].replace(/[.]/g,"").slice(0, v.en.length>4?Math.max(4,v.en.length-2):v.en.length);
+  let html=esc(v.ex); const re=new RegExp("("+key.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"[A-Za-z]*)","i");
+  if(v.en.includes(" ") && v.ex.toLowerCase().includes(v.en.toLowerCase())){ const i=v.ex.toLowerCase().indexOf(v.en.toLowerCase());
+    html=esc(v.ex.slice(0,i))+"<b class='hl'>"+esc(v.ex.slice(i,i+v.en.length))+"</b>"+esc(v.ex.slice(i+v.en.length)); }
+  else html=html.replace(re,"<b class='hl'>$1</b>");
+  return `<div class="excard"><div class="muted">📝 例文${v.exSrc?`（教科書 ${esc(v.exSrc)}）`:""}</div>
+    <div class="exen ans-en">${html}</div><div class="exja">${esc(v.exJa||"")}</div>${sayBtns(v.ex).replace("🔊 発音を聞く","🔊 例文を聞く")}</div>`;
 }
 
 /* ---------- 画像の拡大 ---------- */
@@ -508,7 +536,7 @@ window.addEventListener("hashchange", ()=>{
   route();
 });
 function route(){
-  window.scrollTo(0,0); stopSound(); try{ speechSynthesis.cancel(); }catch(e){}
+  window.scrollTo(0,0); stopAll();
   const h=location.hash||"#top";
   if(h==="#settings"){ applyTheme(null); return renderSettings(); }
   if(h==="#top" || !SUBJ){ applyTheme(null); return renderTop(); }
@@ -588,7 +616,9 @@ function renderHome(){
         ${n?`<div class="big">${n}問</div><div class="muted">復習 ${plan.due.length}問 ＋ 新しい問題 ${plan.fresh.length}問</div>`
            :`<div class="big">今日の分は完了！</div><div class="muted">今日は${ds.n}問・正解${ds.c}問</div>`}</div>
         ${n?`<button class="btn" onclick="startDaily()">スタート ▶</button>`:`<button class="btn" onclick="go('#units')">単元練習でもっとやる</button>`}</div>`;
+  const miss=Object.keys(SETS).filter(id=>SETS[id].subject===SUBJ && missingImg(id));
   app().innerHTML=`${topbar(`<span>${t.icon}</span>${esc(SUBJ)}`,"#top",true)}
+    ${miss.length?`<div class="card warn">⚠️ <b>図・写真のデータが入っていません</b><br><span class="muted">「設定」→「ファイルから読み込む」で、${esc(miss.map(id=>SETS[id].unit).join("・"))}の問題ファイルを読み込み直してね。記録は消えません。</span></div>`:""}
     ${hero}
     <div class="grid3">
       <button class="tile" onclick="go('#units')"><span class="ic">📖</span><b>単元練習</b></button>
@@ -620,7 +650,7 @@ function answerQ(ok, note, soft){
   renderQuiz();
   if(ok) sparkle();
 }
-function nextQ(){ session.i++; session.state={}; if(session.i>=session.list.length){ go("#done"); return; } renderQuiz(); }
+function nextQ(){ stopAll(); session.i++; session.state={}; if(session.i>=session.list.length){ go("#done"); return; } renderQuiz(); }
 function quitSession(){ if(confirm("練習をやめますか？（ここまでの記録は保存されています）")){ session=null; go("#home"); } }
 function inputAttrs(en){ return en ? `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" lang="en" placeholder="英語で入力"` : `autocomplete="off" spellcheck="false" placeholder="答えを入力"`; }
 function kindPill(q){
@@ -642,12 +672,13 @@ function renderQuiz(){
   const qhead = imgTag(q) + (q.mode==="read"
       ? `<div class="q">${qtext(q.q)}</div><div class="word ans-en">${esc(q.word)}</div>`
       : `<div class="q ${isEn(q.q)&&!hasJa(q.q)?"ans-en":""}">${qtext(q.q)}</div>`)
-    + (sayFirst ? sayBtns(q.say, !!q.listen) : "");
+    + (sayFirst ? sayBtns(q.say, !!q.listen) : "")
+    + (q.say && !sayFirst && !st.done ? `<button class="speak slow" data-say="${esc(encodeURIComponent(q.say))}" onclick="session.state.hint=true;speak(decodeURIComponent(this.dataset.say),false,this)">🔊 発音を聞く（ヒント）</button>` : "");
   const sayAfter = q.say && !sayFirst ? sayBtns(q.say) : "";
   const after = st.done ? `
       <div class="verdict ${st.ok?"ok pop":"ng pop"}">${st.ok?(st.soft?"🔺 ヒントありで正解":"⭕ 正解！"):"💦 ざんねん"}</div>
       ${st.note?`<div class="ex" style="color:var(--star)">✏️ ${esc(st.note)}</div>`:""}
-      ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${sayAfter}
+      ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${sayAfter}${exCard(q)}
       <div class="ex">📘 教科書 ${esc(q.page||"")}</div>
       <div class="spacer"></div><button class="btn" onclick="nextQ()">次へ ▶</button>` : "";
   const hintBox = st.hint ? `<div class="hintline ${en?"ans-en":""}">ヒント：${esc(hintText(q.a))}</div>` : "";
@@ -675,7 +706,7 @@ function renderQuiz(){
       body=qhead+(!st.reveal
         ? `<p class="hint">頭の中で答えを思い出してから、ボタンを押そう</p><button class="btn" onclick="session.state.reveal=true;renderQuiz()">答えを見る</button>`
         : ansBox("")+(st.done?after:`<div class="spacer"></div><div class="row"><button class="btn ng" onclick="answerQ(false)">✕ まちがえた</button>
-              <button class="btn ok" onclick="answerQ(true)">○ できた</button></div>`));
+              <button class="btn ok" onclick="answerQ(true,'',session.state.hint)">○ できた</button></div>`));
     }
   }
   else if(q.type==="choice"){
@@ -716,8 +747,9 @@ function renderQuiz(){
   if(inp){ if(!q.listen) inp.focus(); inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ q.type==="calc"?calcSubmit():termSubmit(); }}); }
   if($("#pad")) padInit();
   if(sayFirst && !st.played && !st.done){ st.played=true; const b=$(".speak"); setTimeout(()=>speak(q.say,false,b),300); }
+  if(st.done && !st.autoPlayed && q.say){ st.autoPlayed=true; setTimeout(()=>speakSeq([q.say, q.vocab&&q.vocab.ex]),250); }   // 答え合わせのときは必ず読む
 }
-function pickChoice(i){ const st=session.state, q=curQ(); st.pick=st.opts[i]; answerQ(st.pick===q.a); }
+function pickChoice(i){ const st=session.state, q=curQ(); st.pick=st.opts[i]; answerQ(st.pick===q.a,"",st.hint); }
 function termSubmit(){ const st=session.state, v=$("#inp").value, r=termCheck(curQ(), v); st.input=v; answerQ(r.ok, r.note, st.hint); }
 function termGiveUp(){ session.state.input=""; answerQ(false); }
 function padReveal(){ const st=session.state, c=$("#pad"); st.padImg=(st.strokes&&st.strokes.length&&c)?c.toDataURL("image/png"):null; st.reveal=true; renderQuiz(); }
@@ -912,7 +944,7 @@ function renderResult(){
         ${r.note?`<div class="ex" style="color:var(--star)">✏️ ${esc(r.note)}</div>`:""}${q.type==="calc"?`<div class="ex" style="white-space:pre-wrap">${esc(q.calc.steps)}</div>`:""}
         ${r.self?`<div class="muted" style="margin-top:8px">書けたポイントにチェック（点数に反映）</div>
           ${q.points.map((p,pi)=>`<label class="check"><input type="checkbox" ${r.checks[pi]?"checked":""} onchange="wCheck(${k},${pi},this.checked)"><span>${esc(p)}</span></label>`).join("")}`:""}
-        ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}</div>`;}).join("")}
+        ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${exCard(q)}</div>`;}).join("")}
     <button class="btn" onclick="finishTest()">完了 ▶</button>`;
 }
 function finishTest(){ test.list.forEach((q,k)=>{ if(q.type==="write") grade(q, test.res[k].ok>=0.6); }); test=null; go("#home"); }
@@ -967,7 +999,7 @@ function renderSettings(){
     <h2>問題データ</h2>
     <div class="card">
       ${Object.keys(SETS).length?`<div class="list">${Object.entries(SETS).map(([id,s])=>`<div class="it"><div class="t">
-          <b>${theme(s.subject).icon} ${esc(s.subject)}・${esc(s.unit)}</b><div class="muted">${s.questions.length}問${s.images?"・図"+Object.keys(s.images).length+"枚":""}${s.audio?"・音声"+Object.keys(s.audio).length:""}</div></div>
+          <b>${theme(s.subject).icon} ${esc(s.subject)}・${esc(s.unit)}</b><div class="muted">${s.questions.length}問${s.images?"・図"+Object.keys(s.images).length+"枚":""}${s.audio?"・音声"+Object.keys(s.audio).length:""}${s.version?"・ver."+s.version:""}</div>${missingImg(id)?`<div style="color:var(--ng);font-size:13px;font-weight:700">⚠️ 図が入っていません。読み込み直してね</div>`:""}</div>
           <button class="btn ghost" style="width:auto;min-height:40px" onclick="delSet('${esc(id)}')">削除</button></div>`).join("")}</div>`:`<p class="muted">まだ読み込まれていません</p>`}
       <div class="spacer"></div>
       <label class="btn">ファイルから読み込む<input type="file" accept=".json,application/json" style="display:none" onchange="importFile(this.files[0],'data')"></label>
