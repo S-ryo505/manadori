@@ -1,0 +1,2152 @@
+{
+ "format": "manadori-v1",
+ "set": "eigo-lesson6",
+ "subject": "英語",
+ "unit": "Lesson 6",
+ "lang": "en",
+ "source": "教科書 p.79-88",
+ "version": 1,
+ "made": "2026-10-24",
+ "questions": [
+  {
+   "id": "en6-001",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「生活」を英語で書こう。",
+   "a": "life",
+   "page": "p.79",
+   "say": "life"
+  },
+  {
+   "id": "en6-002",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「生徒、学生」を英語で書こう。",
+   "a": "student",
+   "page": "p.80",
+   "say": "student"
+  },
+  {
+   "id": "en6-003",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「指さす」を英語で書こう。",
+   "a": "point",
+   "page": "p.80",
+   "say": "point"
+  },
+  {
+   "id": "en6-004",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「ポスター」を英語で書こう。",
+   "a": "poster",
+   "page": "p.80",
+   "say": "poster"
+  },
+  {
+   "id": "en6-005",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「今」を英語で書こう。",
+   "a": "now",
+   "page": "p.80",
+   "say": "now"
+  },
+  {
+   "id": "en6-006",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「選ぶ」を英語で書こう。",
+   "a": "choose",
+   "page": "p.81",
+   "say": "choose"
+  },
+  {
+   "id": "en6-007",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「自分自身の」を英語で書こう。",
+   "a": "own",
+   "page": "p.81",
+   "say": "own"
+  },
+  {
+   "id": "en6-008",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「予定、時間割」を英語で書こう。",
+   "a": "schedule",
+   "page": "p.81",
+   "say": "schedule"
+  },
+  {
+   "id": "en6-009",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「休憩」を英語で書こう。",
+   "a": "break",
+   "page": "p.81",
+   "say": "break"
+  },
+  {
+   "id": "en6-010",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「〜の間に」を英語で書こう。",
+   "a": "between",
+   "page": "p.81",
+   "say": "between"
+  },
+  {
+   "id": "en6-011",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「これらの」を英語で書こう。",
+   "a": "these",
+   "page": "p.81",
+   "say": "these"
+  },
+  {
+   "id": "en6-012",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「次の」を英語で書こう。",
+   "a": "next",
+   "page": "p.81",
+   "say": "next"
+  },
+  {
+   "id": "en6-013",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「（手に）持つ」を英語で書こう。",
+   "a": "hold",
+   "page": "p.81",
+   "say": "hold"
+  },
+  {
+   "id": "en6-014",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「フルート」を英語で書こう。",
+   "a": "flute",
+   "page": "p.81",
+   "say": "flute"
+  },
+  {
+   "id": "en6-015",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「授業」を英語で書こう。",
+   "a": "class",
+   "page": "p.81",
+   "say": "class"
+  },
+  {
+   "id": "en6-016",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「みんな、だれでも」を英語で書こう。",
+   "a": "everyone",
+   "page": "p.81",
+   "star": true,
+   "say": "everyone"
+  },
+  {
+   "id": "en6-017",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「男の子」を英語で書こう。",
+   "a": "boy",
+   "page": "p.81",
+   "say": "boy"
+  },
+  {
+   "id": "en6-018",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "「女の子」を英語で書こう。",
+   "a": "girl",
+   "page": "p.81",
+   "say": "girl"
+  },
+  {
+   "id": "en6-019",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "have の主語が3人称単数（he, she, everyone など）のときの形は？",
+   "a": "has",
+   "page": "p.81",
+   "star": true,
+   "ex": "Everyone は「みんな」だが単数あつかい → Everyone has ...",
+   "say": "has"
+  },
+  {
+   "id": "en6-020",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "class の複数形は？",
+   "a": "classes",
+   "page": "p.81",
+   "ex": "s, sh, ch, x で終わる語は es をつける。",
+   "say": "classes"
+  },
+  {
+   "id": "en6-021",
+   "type": "choice",
+   "sec": "Part 1 単語",
+   "q": "between の意味は？",
+   "a": "〜の間に",
+   "wrong": [
+    "〜のとなりに",
+    "〜の上に",
+    "〜のうしろに"
+   ],
+   "page": "p.81",
+   "say": "between"
+  },
+  {
+   "id": "en6-022",
+   "type": "choice",
+   "sec": "Part 1 単語",
+   "q": "own の意味は？",
+   "a": "自分自身の",
+   "wrong": [
+    "持っている",
+    "1つの",
+    "ほかの"
+   ],
+   "page": "p.81",
+   "say": "own"
+  },
+  {
+   "id": "en6-023",
+   "type": "choice",
+   "sec": "Part 1 単語",
+   "q": "schedule の意味は？",
+   "a": "予定、時間割",
+   "wrong": [
+    "休憩",
+    "授業",
+    "教室"
+   ],
+   "page": "p.81",
+   "say": "schedule"
+  },
+  {
+   "id": "en6-024",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "choose",
+   "page": "p.81",
+   "say": "choose",
+   "listen": true
+  },
+  {
+   "id": "en6-025",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "schedule",
+   "page": "p.81",
+   "say": "schedule",
+   "listen": true
+  },
+  {
+   "id": "en6-026",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "between",
+   "page": "p.81",
+   "say": "between",
+   "listen": true
+  },
+  {
+   "id": "en6-027",
+   "type": "term",
+   "sec": "Part 1 単語",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "everyone",
+   "page": "p.81",
+   "star": true,
+   "say": "everyone",
+   "listen": true
+  },
+  {
+   "id": "en6-028",
+   "type": "choice",
+   "sec": "Part 1 本文",
+   "q": "Scene 1：写真のケビンは何をしている？",
+   "a": "フットボールを投げている",
+   "wrong": [
+    "フットボールをけっている",
+    "ポスターを指さしている",
+    "フルートをふいている"
+   ],
+   "page": "p.80",
+   "say": "Kevin is throwing a football now."
+  },
+  {
+   "id": "en6-029",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "Kevin (　) throwing a football now.",
+   "a": "is",
+   "page": "p.80",
+   "star": true,
+   "say": "Kevin is throwing a football now."
+  },
+  {
+   "id": "en6-030",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "This student is (　) at the poster.（この生徒はポスターを指さしています）",
+   "a": "pointing",
+   "page": "p.80",
+   "say": "This student is pointing at the poster."
+  },
+  {
+   "id": "en6-031",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "At Kevin's school, students (　) their own classes.",
+   "a": "choose",
+   "page": "p.81",
+   "say": "At Kevin's school, students choose their own classes."
+  },
+  {
+   "id": "en6-032",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "Everyone (　) a different schedule.",
+   "a": "has",
+   "page": "p.81",
+   "star": true,
+   "ex": "Everyone は単数あつかいなので have ではなく has。",
+   "say": "Everyone has a different schedule."
+  },
+  {
+   "id": "en6-033",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "This is a picture of a short (　) between classes.",
+   "a": "break",
+   "page": "p.81",
+   "say": "This is a picture of a short break between classes."
+  },
+  {
+   "id": "en6-034",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "These students (　)(　) to their next class.（歩いています）",
+   "a": "are walking",
+   "page": "p.81",
+   "star": true,
+   "say": "These students are walking to their next class."
+  },
+  {
+   "id": "en6-035",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "The boy (　)(　) to his music class.（向かっています）",
+   "a": "is going",
+   "page": "p.81",
+   "star": true,
+   "say": "The boy is going to his music class."
+  },
+  {
+   "id": "en6-036",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "He is (　) a flute case.（持っています）",
+   "a": "holding",
+   "page": "p.81",
+   "star": true,
+   "say": "He is holding a flute case."
+  },
+  {
+   "id": "en6-037",
+   "type": "term",
+   "sec": "Part 1 本文",
+   "q": "The girl is (　) her gym shoes to P.E. class.（運んでいます）",
+   "a": "carrying",
+   "page": "p.81",
+   "star": true,
+   "say": "The girl is carrying her gym shoes to P.E. class."
+  },
+  {
+   "id": "en6-038",
+   "type": "choice",
+   "sec": "Part 1 本文",
+   "q": "ケビンの学校の時間割の特徴は？",
+   "a": "生徒が自分で授業を選ぶので、一人ひとり時間割がちがう",
+   "wrong": [
+    "全員が同じ時間割で授業を受ける",
+    "午前中だけ授業がある",
+    "毎日、体育の授業がある"
+   ],
+   "page": "p.81",
+   "star": true
+  },
+  {
+   "id": "en6-039",
+   "type": "choice",
+   "sec": "Part 1 本文",
+   "q": "写真の男の子（The boy）が向かっている授業は？",
+   "a": "音楽の授業（music class）",
+   "wrong": [
+    "体育の授業（P.E. class）",
+    "フルートのレッスン（flute lesson）",
+    "体操のレッスン（gymnastics lesson）"
+   ],
+   "page": "p.81"
+  },
+  {
+   "id": "en6-040",
+   "type": "choice",
+   "sec": "Part 1 本文",
+   "q": "写真の女の子（The girl）が運んでいるものは？",
+   "a": "体育館シューズ（gym shoes）",
+   "wrong": [
+    "フルートのケース",
+    "教科書",
+    "お弁当"
+   ],
+   "page": "p.81"
+  },
+  {
+   "id": "en6-041",
+   "type": "order",
+   "sec": "Part 1 本文",
+   "q": "「ケビンは今フットボールを投げています。」",
+   "items": [
+    "Kevin",
+    "is",
+    "throwing",
+    "a",
+    "football",
+    "now."
+   ],
+   "page": "p.80",
+   "star": true,
+   "say": "Kevin is throwing a football now.",
+   "inline": true
+  },
+  {
+   "id": "en6-042",
+   "type": "order",
+   "sec": "Part 1 本文",
+   "q": "「この生徒はポスターを指さしています。」",
+   "items": [
+    "This",
+    "student",
+    "is",
+    "pointing",
+    "at",
+    "the",
+    "poster."
+   ],
+   "page": "p.80",
+   "say": "This student is pointing at the poster.",
+   "inline": true
+  },
+  {
+   "id": "en6-043",
+   "type": "order",
+   "sec": "Part 1 本文",
+   "q": "「みんなちがう時間割を持っています。」",
+   "items": [
+    "Everyone",
+    "has",
+    "a",
+    "different",
+    "schedule."
+   ],
+   "page": "p.81",
+   "star": true,
+   "say": "Everyone has a different schedule.",
+   "inline": true
+  },
+  {
+   "id": "en6-044",
+   "type": "order",
+   "sec": "Part 1 本文",
+   "q": "「これらの生徒たちは次の授業に歩いて向かっています。」",
+   "items": [
+    "These",
+    "students",
+    "are",
+    "walking",
+    "to",
+    "their",
+    "next",
+    "class."
+   ],
+   "page": "p.81",
+   "say": "These students are walking to their next class.",
+   "inline": true
+  },
+  {
+   "id": "en6-045",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "「カフェテリア（セルフサービス式の食堂）」を英語で書こう。",
+   "a": "cafeteria",
+   "page": "p.83",
+   "say": "cafeteria"
+  },
+  {
+   "id": "en6-046",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "「ほかの人［もの］」を英語で書こう。",
+   "a": "others",
+   "accept": [
+    "other"
+   ],
+   "page": "p.83",
+   "star": true,
+   "say": "others"
+  },
+  {
+   "id": "en6-047",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "「持ってくる」を英語で書こう。",
+   "a": "bring",
+   "page": "p.83",
+   "say": "bring"
+  },
+  {
+   "id": "en6-048",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "「種類」を英語で書こう。",
+   "a": "kind",
+   "page": "p.83",
+   "say": "kind"
+  },
+  {
+   "id": "en6-049",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "「よくある、ふつうの」を英語で書こう。",
+   "a": "common",
+   "page": "p.83",
+   "star": true,
+   "say": "common"
+  },
+  {
+   "id": "en6-050",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "「メキシコの」を英語で書こう。",
+   "a": "Mexican",
+   "page": "p.83",
+   "say": "Mexican"
+  },
+  {
+   "id": "en6-051",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "「買う」を英語で書こう。",
+   "a": "buy",
+   "page": "p.83",
+   "say": "buy"
+  },
+  {
+   "id": "en6-052",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "they are の短縮形は？",
+   "a": "they're",
+   "page": "p.82",
+   "say": "they're",
+   "exact": true
+  },
+  {
+   "id": "en6-053",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "are not の短縮形は？",
+   "a": "aren't",
+   "page": "p.82",
+   "say": "aren't",
+   "exact": true
+  },
+  {
+   "id": "en6-054",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "is not の短縮形は？",
+   "a": "isn't",
+   "page": "p.88",
+   "say": "isn't",
+   "exact": true
+  },
+  {
+   "id": "en6-055",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "I am の短縮形は？",
+   "a": "I'm",
+   "page": "p.84",
+   "say": "I'm",
+   "exact": true
+  },
+  {
+   "id": "en6-056",
+   "type": "choice",
+   "sec": "Part 2 単語",
+   "q": "common の意味は？",
+   "a": "よくある、一般的な",
+   "wrong": [
+    "新鮮な",
+    "人気のある",
+    "かんたんな"
+   ],
+   "page": "p.83",
+   "star": true,
+   "say": "common"
+  },
+  {
+   "id": "en6-057",
+   "type": "choice",
+   "sec": "Part 2 単語",
+   "q": "fresh fruit の意味は？",
+   "a": "新鮮な果物",
+   "wrong": [
+    "冷たい果物",
+    "人気の果物",
+    "かわいた果物"
+   ],
+   "page": "p.83",
+   "star": true,
+   "say": "fresh fruit"
+  },
+  {
+   "id": "en6-058",
+   "type": "choice",
+   "sec": "Part 2 単語",
+   "q": "popular の意味は？",
+   "a": "人気のある",
+   "wrong": [
+    "よくある",
+    "メキシコの",
+    "おいしい"
+   ],
+   "page": "p.83",
+   "star": true,
+   "say": "popular"
+  },
+  {
+   "id": "en6-059",
+   "type": "choice",
+   "sec": "Part 2 単語",
+   "q": "kind の意味は？（What kind of food ...?）",
+   "a": "種類",
+   "wrong": [
+    "親切な",
+    "子ども",
+    "料理"
+   ],
+   "page": "p.83",
+   "say": "What kind of food"
+  },
+  {
+   "id": "en6-060",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "cafeteria",
+   "page": "p.83",
+   "say": "cafeteria",
+   "listen": true
+  },
+  {
+   "id": "en6-061",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "common",
+   "page": "p.83",
+   "star": true,
+   "say": "common",
+   "listen": true
+  },
+  {
+   "id": "en6-062",
+   "type": "term",
+   "sec": "Part 2 単語",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "bring",
+   "page": "p.83",
+   "say": "bring",
+   "listen": true
+  },
+  {
+   "id": "en6-063",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "(　) the students eating lunch in the classroom?",
+   "a": "Are",
+   "page": "p.82",
+   "star": true,
+   "say": "Are the students eating lunch in the classroom?"
+  },
+  {
+   "id": "en6-064",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "Are the students eating lunch in the classroom? に「はい」で答えよう。",
+   "a": "Yes, they are.",
+   "page": "p.82",
+   "star": true,
+   "say": "Yes, they are."
+  },
+  {
+   "id": "en6-065",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "Are the students eating lunch in the classroom? に「いいえ」で答えよう。",
+   "a": "No, they are not.",
+   "accept": [
+    "No, they aren't.",
+    "No, they're not."
+   ],
+   "page": "p.82",
+   "star": true,
+   "say": "No, they are not."
+  },
+  {
+   "id": "en6-066",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "(　) students buy lunch at the cafeteria. Others bring lunch from home.",
+   "a": "Some",
+   "page": "p.83",
+   "star": true,
+   "say": "Some students buy lunch at the cafeteria."
+  },
+  {
+   "id": "en6-067",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "Some students buy lunch at the cafeteria. (　) bring lunch from home.",
+   "a": "Others",
+   "page": "p.83",
+   "star": true,
+   "say": "Others bring lunch from home."
+  },
+  {
+   "id": "en6-068",
+   "type": "choice",
+   "sec": "Part 2 本文",
+   "q": "Some students buy lunch at the cafeteria. Others bring lunch from home. の意味は？",
+   "a": "カフェテリアで昼食を買う生徒もいれば、家から持ってくる生徒もいる。",
+   "wrong": [
+    "何人かの生徒はカフェテリアで昼食を買い、ほかの生徒もカフェテリアで食べる。",
+    "生徒はみんな、カフェテリアで昼食を買う。",
+    "生徒はみんな、家から昼食を持ってくる。"
+   ],
+   "page": "p.83",
+   "star": true,
+   "ex": "some ..., others ~ ＝「…もいれば、～もいる」"
+  },
+  {
+   "id": "en6-069",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "What (　) of food do they bring from home?（どんな種類の）",
+   "a": "kind",
+   "page": "p.83",
+   "say": "What kind of food do they bring from home?"
+  },
+  {
+   "id": "en6-070",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "Well, sandwiches and fresh fruit are (　).（よくある）",
+   "a": "common",
+   "page": "p.83",
+   "star": true,
+   "say": "Well, sandwiches and fresh fruit are common."
+  },
+  {
+   "id": "en6-071",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "(　) this boy eating a sandwich?",
+   "a": "Is",
+   "page": "p.83",
+   "star": true,
+   "say": "Is this boy eating a sandwich?"
+  },
+  {
+   "id": "en6-072",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "Is this boy eating a sandwich? に「いいえ」で答えよう。",
+   "a": "No, he is not.",
+   "accept": [
+    "No, he isn't.",
+    "No, he's not."
+   ],
+   "page": "p.83",
+   "star": true,
+   "say": "No, he is not."
+  },
+  {
+   "id": "en6-073",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "He is eating a (　). It's a popular Mexican food.",
+   "a": "taco",
+   "page": "p.83",
+   "star": true,
+   "say": "He is eating a taco."
+  },
+  {
+   "id": "en6-074",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "It's a (　) Mexican food.（人気のある）",
+   "a": "popular",
+   "page": "p.83",
+   "star": true,
+   "say": "It's a popular Mexican food."
+  },
+  {
+   "id": "en6-075",
+   "type": "choice",
+   "sec": "Part 2 本文",
+   "q": "ケビンの学校の生徒たちの昼食にあてはまるのは？",
+   "a": "カフェテリアで買う／家から持ってくる",
+   "wrong": [
+    "全員が給食を食べる",
+    "全員が家に帰って食べる",
+    "教室で先生が配る"
+   ],
+   "page": "p.83"
+  },
+  {
+   "id": "en6-076",
+   "type": "choice",
+   "sec": "Part 2 本文",
+   "q": "生徒たちがよく家から持ってくる食べ物は？",
+   "a": "サンドイッチと新鮮な果物",
+   "wrong": [
+    "タコスとピザ",
+    "おにぎりとお茶",
+    "パスタとサラダ"
+   ],
+   "page": "p.83",
+   "star": true
+  },
+  {
+   "id": "en6-077",
+   "type": "choice",
+   "sec": "Part 2 本文",
+   "q": "写真の男の子が食べているものは？",
+   "a": "タコス（メキシコの料理）",
+   "wrong": [
+    "サンドイッチ",
+    "ピザ",
+    "果物"
+   ],
+   "page": "p.83",
+   "star": true
+  },
+  {
+   "id": "en6-078",
+   "type": "order",
+   "sec": "Part 2 本文",
+   "q": "「生徒たちは教室で昼食を食べていますか。」",
+   "items": [
+    "Are",
+    "the students",
+    "eating",
+    "lunch",
+    "in the classroom?"
+   ],
+   "page": "p.82",
+   "star": true,
+   "say": "Are the students eating lunch in the classroom?",
+   "inline": true
+  },
+  {
+   "id": "en6-079",
+   "type": "order",
+   "sec": "Part 2 本文",
+   "q": "「彼らは家からどんな種類の食べ物を持ってきますか。」",
+   "items": [
+    "What",
+    "kind",
+    "of",
+    "food",
+    "do",
+    "they",
+    "bring",
+    "from home?"
+   ],
+   "page": "p.83",
+   "say": "What kind of food do they bring from home?",
+   "inline": true
+  },
+  {
+   "id": "en6-080",
+   "type": "order",
+   "sec": "Part 2 本文",
+   "q": "「彼はタコスを食べています。」",
+   "items": [
+    "He",
+    "is",
+    "eating",
+    "a",
+    "taco."
+   ],
+   "page": "p.83",
+   "star": true,
+   "say": "He is eating a taco.",
+   "inline": true
+  },
+  {
+   "id": "en6-081",
+   "type": "term",
+   "sec": "Part 2 本文",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "He is eating a taco.",
+   "page": "p.83",
+   "star": true,
+   "say": "He is eating a taco.",
+   "listen": true
+  },
+  {
+   "id": "en6-082",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「わくわくした」を英語で書こう。",
+   "a": "excited",
+   "page": "p.84",
+   "say": "excited"
+  },
+  {
+   "id": "en6-083",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「どちら、どれ」を英語で書こう。",
+   "a": "which",
+   "page": "p.84",
+   "say": "which"
+  },
+  {
+   "id": "en6-084",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「または、それとも」を英語で書こう。",
+   "a": "or",
+   "page": "p.84",
+   "say": "or"
+  },
+  {
+   "id": "en6-085",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「パスタ」を英語で書こう。",
+   "a": "pasta",
+   "page": "p.84",
+   "say": "pasta"
+  },
+  {
+   "id": "en6-086",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「私たちの」を英語で書こう。",
+   "a": "our",
+   "page": "p.84",
+   "say": "our"
+  },
+  {
+   "id": "en6-087",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「活動」を英語で書こう。",
+   "a": "activity",
+   "page": "p.85",
+   "say": "activity"
+  },
+  {
+   "id": "en6-088",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「旅行」を英語で書こう。",
+   "a": "trip",
+   "page": "p.85",
+   "say": "trip"
+  },
+  {
+   "id": "en6-089",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「コンテスト」を英語で書こう。",
+   "a": "contest",
+   "page": "p.85",
+   "say": "contest"
+  },
+  {
+   "id": "en6-090",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「昼食の時間」を英語で書こう。",
+   "a": "lunchtime",
+   "page": "p.85",
+   "say": "lunchtime"
+  },
+  {
+   "id": "en6-091",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「賛成する、同意する」を英語で書こう。",
+   "a": "agree",
+   "page": "p.85",
+   "say": "agree"
+  },
+  {
+   "id": "en6-092",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「メニュー」を英語で書こう。",
+   "a": "menu",
+   "page": "p.85",
+   "say": "menu"
+  },
+  {
+   "id": "en6-093",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「最もよい」を英語で書こう。",
+   "a": "best",
+   "page": "p.85",
+   "say": "best"
+  },
+  {
+   "id": "en6-094",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「部活動」を英語で書こう。",
+   "a": "club activity",
+   "page": "p.85",
+   "say": "club activity"
+  },
+  {
+   "id": "en6-095",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「校外学習」を英語で書こう。",
+   "a": "field trip",
+   "page": "p.85",
+   "say": "field trip"
+  },
+  {
+   "id": "en6-096",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「合唱コンテスト」を英語で書こう。",
+   "a": "chorus contest",
+   "page": "p.85",
+   "say": "chorus contest"
+  },
+  {
+   "id": "en6-097",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "「体育の授業」を英語で書こう。",
+   "a": "P.E. class",
+   "accept": [
+    "PE class",
+    "P.E.class"
+   ],
+   "page": "p.85",
+   "say": "P.E. class"
+  },
+  {
+   "id": "en6-098",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "(　) do you want, apple pie or chocolate cake?（どちらが）",
+   "a": "Which",
+   "page": "p.84",
+   "star": true,
+   "ex": "「AとBのどちらが…？」は Which ..., A or B?",
+   "say": "Which do you want, apple pie or chocolate cake?"
+  },
+  {
+   "id": "en6-099",
+   "type": "choice",
+   "sec": "Part 3・Small Talk",
+   "q": "Which do you want, apple pie or chocolate cake? への答えとして正しいものは？",
+   "a": "I want chocolate cake.",
+   "wrong": [
+    "Yes, I do.",
+    "No, I don't.",
+    "Yes, I want."
+   ],
+   "page": "p.84",
+   "star": true,
+   "ex": "Which の質問には Yes / No ではなく、どちらかを答える。"
+  },
+  {
+   "id": "en6-100",
+   "type": "choice",
+   "sec": "Part 3・Small Talk",
+   "q": "マークがわくわくしているのはなぜ？",
+   "a": "来週の水曜日の昼食で、デザートを選べるから",
+   "wrong": [
+    "今日の昼食がカレーライスだから",
+    "アップルパイを作るから",
+    "チョコレートケーキをもらったから"
+   ],
+   "page": "p.84",
+   "say": "We can choose our dessert at lunch next Wednesday."
+  },
+  {
+   "id": "en6-101",
+   "type": "choice",
+   "sec": "Part 3・Small Talk",
+   "q": "I can't wait! の意味は？",
+   "a": "待ちきれない！",
+   "wrong": [
+    "待っていられない、帰ろう！",
+    "待ってはいけない！",
+    "待たなくていいよ！"
+   ],
+   "page": "p.84",
+   "say": "I can't wait!"
+  },
+  {
+   "id": "en6-102",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "I'm so (　)!（とてもわくわくしている）",
+   "a": "excited",
+   "page": "p.84",
+   "say": "I'm so excited!"
+  },
+  {
+   "id": "en6-103",
+   "type": "order",
+   "sec": "Part 3・Small Talk",
+   "q": "「パスタとピザでは、どちらがほしいですか。」",
+   "items": [
+    "Which",
+    "do",
+    "you",
+    "want,",
+    "pasta",
+    "or",
+    "pizza?"
+   ],
+   "page": "p.84",
+   "star": true,
+   "say": "Which do you want, pasta or pizza?",
+   "inline": true
+  },
+  {
+   "id": "en6-104",
+   "type": "order",
+   "sec": "Part 3・Small Talk",
+   "q": "「私たちは来週の水曜日の昼食で、デザートを選べます。」",
+   "items": [
+    "We",
+    "can",
+    "choose",
+    "our",
+    "dessert",
+    "at lunch",
+    "next Wednesday."
+   ],
+   "page": "p.84",
+   "say": "We can choose our dessert at lunch next Wednesday.",
+   "inline": true
+  },
+  {
+   "id": "en6-105",
+   "type": "choice",
+   "sec": "Part 3・Small Talk",
+   "q": "相手の言ったことに「賛成です」と伝える英語は？",
+   "a": "I agree.",
+   "wrong": [
+    "I know.",
+    "I can't wait.",
+    "I want."
+   ],
+   "page": "p.85",
+   "say": "I agree."
+  },
+  {
+   "id": "en6-106",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "excited",
+   "page": "p.84",
+   "say": "excited",
+   "listen": true
+  },
+  {
+   "id": "en6-107",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "which",
+   "page": "p.84",
+   "say": "which",
+   "listen": true
+  },
+  {
+   "id": "en6-108",
+   "type": "term",
+   "sec": "Part 3・Small Talk",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "Which do you want?",
+   "page": "p.84",
+   "say": "Which do you want?",
+   "listen": true
+  },
+  {
+   "id": "en6-109",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「親愛なる（手紙の書き出し）」を英語で書こう。",
+   "a": "dear",
+   "page": "p.86",
+   "say": "dear"
+  },
+  {
+   "id": "en6-110",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「スペイン語」を英語で書こう。",
+   "a": "Spanish",
+   "page": "p.86",
+   "say": "Spanish"
+  },
+  {
+   "id": "en6-111",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「物語」を英語で書こう。",
+   "a": "story",
+   "page": "p.86",
+   "say": "story"
+  },
+  {
+   "id": "en6-112",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「外国の」を英語で書こう。",
+   "a": "foreign",
+   "page": "p.86",
+   "say": "foreign"
+  },
+  {
+   "id": "en6-113",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「ドイツ語」を英語で書こう。",
+   "a": "German",
+   "page": "p.86",
+   "say": "German"
+  },
+  {
+   "id": "en6-114",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「行事、出来事」を英語で書こう。",
+   "a": "event",
+   "page": "p.86",
+   "say": "event"
+  },
+  {
+   "id": "en6-115",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「式」を英語で書こう。",
+   "a": "ceremony",
+   "page": "p.86",
+   "say": "ceremony"
+  },
+  {
+   "id": "en6-116",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「卒業」を英語で書こう。",
+   "a": "graduation",
+   "page": "p.86",
+   "say": "graduation"
+  },
+  {
+   "id": "en6-117",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「（食事を）出す、配る」を英語で書こう。",
+   "a": "serve",
+   "page": "p.86",
+   "say": "serve"
+  },
+  {
+   "id": "en6-118",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「すべての」を英語で書こう。",
+   "a": "all",
+   "page": "p.86",
+   "say": "all"
+  },
+  {
+   "id": "en6-119",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「休み、休暇」を英語で書こう。",
+   "a": "vacation",
+   "page": "p.86",
+   "say": "vacation"
+  },
+  {
+   "id": "en6-120",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「学校行事」を英語で書こう。",
+   "a": "school event",
+   "page": "p.87 Word Bank",
+   "say": "school event"
+  },
+  {
+   "id": "en6-121",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「入学式」を英語で書こう。",
+   "a": "entrance ceremony",
+   "page": "p.87 Word Bank",
+   "say": "entrance ceremony"
+  },
+  {
+   "id": "en6-122",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「卒業式」を英語で書こう。",
+   "a": "graduation ceremony",
+   "page": "p.87 Word Bank",
+   "say": "graduation ceremony"
+  },
+  {
+   "id": "en6-123",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「時間割」を英語で書こう。",
+   "a": "class schedule",
+   "page": "p.87 Word Bank",
+   "say": "class schedule"
+  },
+  {
+   "id": "en6-124",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「冬休み」を英語で書こう。",
+   "a": "winter vacation",
+   "page": "p.87 Word Bank",
+   "say": "winter vacation"
+  },
+  {
+   "id": "en6-125",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「自転車で学校に行く」を英語で書こう。",
+   "a": "go to school by bike",
+   "page": "p.87 Word Bank",
+   "say": "go to school by bike"
+  },
+  {
+   "id": "en6-126",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「授業を受ける」を英語で書こう。",
+   "a": "take a class",
+   "page": "p.87 Word Bank",
+   "say": "take a class"
+  },
+  {
+   "id": "en6-127",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「給食の配膳をする」を英語で書こう。",
+   "a": "serve lunch",
+   "page": "p.87 Word Bank",
+   "say": "serve lunch"
+  },
+  {
+   "id": "en6-128",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "「教室をそうじする」を英語で書こう。",
+   "a": "clean our classroom",
+   "page": "p.87 Word Bank",
+   "say": "clean our classroom"
+  },
+  {
+   "id": "en6-129",
+   "type": "choice",
+   "sec": "Goal Activity",
+   "q": "ケビンがメールで紹介しているのは？",
+   "a": "自分のお気に入りの授業（スペイン語）",
+   "wrong": [
+    "学校の行事",
+    "学校の昼食",
+    "部活動"
+   ],
+   "page": "p.86",
+   "say": "This is a picture of my favorite class."
+  },
+  {
+   "id": "en6-130",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "We are (　) Spanish.（勉強しています）",
+   "a": "studying",
+   "page": "p.86",
+   "say": "We are studying Spanish."
+  },
+  {
+   "id": "en6-131",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "We are (　) to a story in Spanish.（聞いています）",
+   "a": "listening",
+   "page": "p.86",
+   "say": "We are listening to a story in Spanish."
+  },
+  {
+   "id": "en6-132",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "At my school, (　) students study a foreign language.（すべての）",
+   "a": "all",
+   "page": "p.86",
+   "say": "At my school, all students study a foreign language."
+  },
+  {
+   "id": "en6-133",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "All students study a (　) language.（外国の）",
+   "a": "foreign",
+   "page": "p.86",
+   "say": "All students study a foreign language."
+  },
+  {
+   "id": "en6-134",
+   "type": "choice",
+   "sec": "Goal Activity",
+   "q": "ケビンの学校で選べる外国語に入っていないものは？",
+   "a": "韓国語",
+   "wrong": [
+    "スペイン語",
+    "ドイツ語",
+    "日本語"
+   ],
+   "page": "p.86",
+   "say": "We can choose Spanish, French, German, Chinese, or Japanese."
+  },
+  {
+   "id": "en6-135",
+   "type": "choice",
+   "sec": "Goal Activity",
+   "q": "ケビンの学校で、多くの生徒が選ぶ言語は？",
+   "a": "スペイン語",
+   "wrong": [
+    "フランス語",
+    "中国語",
+    "日本語"
+   ],
+   "page": "p.86",
+   "say": "Many students choose Spanish."
+  },
+  {
+   "id": "en6-136",
+   "type": "choice",
+   "sec": "Goal Activity",
+   "q": "メールやカードの書き方として正しいものは？",
+   "a": "最初に Dear ○○, と相手の名前、最後に Yours, と自分の名前",
+   "wrong": [
+    "最初に自分の名前、最後に相手の名前",
+    "最初に Yours, 、最後に Dear",
+    "名前は書かない"
+   ],
+   "page": "p.86"
+  },
+  {
+   "id": "en6-137",
+   "type": "choice",
+   "sec": "Goal Activity",
+   "q": "写真を描写する文はどれ？",
+   "a": "We are studying Spanish.",
+   "wrong": [
+    "All students study a foreign language.",
+    "Many students choose Spanish.",
+    "We can choose Spanish."
+   ],
+   "page": "p.87",
+   "star": true,
+   "ex": "写真の描写＝今していること（現在進行形）。学校の説明＝ふだんの習慣（現在形）。"
+  },
+  {
+   "id": "en6-138",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "Please (　) me about your school life in Japan.（教えて）",
+   "a": "tell",
+   "page": "p.86",
+   "say": "Please tell me about your school life in Japan."
+  },
+  {
+   "id": "en6-139",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "foreign",
+   "page": "p.86",
+   "say": "foreign",
+   "listen": true
+  },
+  {
+   "id": "en6-140",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "graduation",
+   "page": "p.86",
+   "say": "graduation",
+   "listen": true
+  },
+  {
+   "id": "en6-141",
+   "type": "term",
+   "sec": "Goal Activity",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "vacation",
+   "page": "p.86",
+   "say": "vacation",
+   "listen": true
+  },
+  {
+   "id": "en6-142",
+   "type": "write",
+   "sec": "Goal Activity",
+   "q": "ケビンへの返信メールを書こう（写真の描写＋詳しい説明）。",
+   "a": "Dear Kevin,\nThis is a picture of our chorus contest. We are singing on the stage.\nAt my school, all classes join the chorus contest. We practice every day.\nPlease tell me about your school events.\nYours,\n（自分の名前）",
+   "points": [
+    "Dear ○○, で始めた",
+    "写真の描写を現在進行形（am / are / is ＋ -ing）で書いた",
+    "詳しい説明を現在形（ふだんのこと）で書いた",
+    "Yours, と自分の名前で終えた"
+   ],
+   "page": "p.87",
+   "star": true,
+   "ex": "模範解答はアプリ用に作った例。教科書の Word Bank の表現を使うと書きやすい。"
+  },
+  {
+   "id": "en6-143",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "現在進行形の形は〈be動詞＋動詞の（　）形〉",
+   "a": "-ing",
+   "accept": [
+    "ing",
+    "ing形",
+    "-ing形"
+   ],
+   "page": "p.88",
+   "star": true
+  },
+  {
+   "id": "en6-144",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "play の -ing形は？",
+   "a": "playing",
+   "page": "p.88",
+   "star": true,
+   "ex": "そのまま ing",
+   "say": "playing"
+  },
+  {
+   "id": "en6-145",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "watch の -ing形は？",
+   "a": "watching",
+   "page": "p.88",
+   "star": true,
+   "ex": "そのまま ing",
+   "say": "watching"
+  },
+  {
+   "id": "en6-146",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "use の -ing形は？",
+   "a": "using",
+   "page": "p.88",
+   "star": true,
+   "ex": "最後の e をとって ing",
+   "say": "using"
+  },
+  {
+   "id": "en6-147",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "write の -ing形は？",
+   "a": "writing",
+   "page": "p.88",
+   "star": true,
+   "ex": "最後の e をとって ing",
+   "say": "writing"
+  },
+  {
+   "id": "en6-148",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "run の -ing形は？",
+   "a": "running",
+   "page": "p.88",
+   "star": true,
+   "ex": "最後の子音字を重ねて ing",
+   "say": "running"
+  },
+  {
+   "id": "en6-149",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "throw の -ing形は？",
+   "a": "throwing",
+   "page": "p.88",
+   "ex": "そのまま ing",
+   "say": "throwing"
+  },
+  {
+   "id": "en6-150",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "hold の -ing形は？",
+   "a": "holding",
+   "page": "p.88",
+   "ex": "そのまま ing",
+   "say": "holding"
+  },
+  {
+   "id": "en6-151",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "carry の -ing形は？",
+   "a": "carrying",
+   "page": "p.88",
+   "ex": "y で終わっても、そのまま ing",
+   "say": "carrying"
+  },
+  {
+   "id": "en6-152",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "study の -ing形は？",
+   "a": "studying",
+   "page": "p.88",
+   "ex": "y で終わっても、そのまま ing",
+   "say": "studying"
+  },
+  {
+   "id": "en6-153",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "listen の -ing形は？",
+   "a": "listening",
+   "page": "p.88",
+   "ex": "そのまま ing",
+   "say": "listening"
+  },
+  {
+   "id": "en6-154",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "make の -ing形は？",
+   "a": "making",
+   "page": "p.88",
+   "ex": "最後の e をとって ing（教科書外の練習）",
+   "say": "making"
+  },
+  {
+   "id": "en6-155",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "come の -ing形は？",
+   "a": "coming",
+   "page": "p.88",
+   "ex": "最後の e をとって ing（教科書外の練習）",
+   "say": "coming"
+  },
+  {
+   "id": "en6-156",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "swim の -ing形は？",
+   "a": "swimming",
+   "page": "p.88",
+   "ex": "最後の子音字を重ねて ing（教科書外の練習）",
+   "say": "swimming"
+  },
+  {
+   "id": "en6-157",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "sit の -ing形は？",
+   "a": "sitting",
+   "page": "p.88",
+   "ex": "最後の子音字を重ねて ing（教科書外の練習）",
+   "say": "sitting"
+  },
+  {
+   "id": "en6-158",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "I (　) studying math.",
+   "a": "am",
+   "page": "p.88",
+   "say": "I'm studying math."
+  },
+  {
+   "id": "en6-159",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "He (　) studying in his room.",
+   "a": "is",
+   "page": "p.88",
+   "say": "He is studying in his room."
+  },
+  {
+   "id": "en6-160",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "We (　) listening to a story in Spanish.",
+   "a": "are",
+   "page": "p.88",
+   "say": "We are listening to a story in Spanish."
+  },
+  {
+   "id": "en6-161",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "You (　) looking at page 31.",
+   "a": "are",
+   "page": "p.88",
+   "say": "You are looking at page 31."
+  },
+  {
+   "id": "en6-162",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Kate (　) talking about her iguana.",
+   "a": "is",
+   "page": "p.88",
+   "say": "Kate is talking about her iguana."
+  },
+  {
+   "id": "en6-163",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Kevin is throwing a football now. を疑問文にしよう。",
+   "a": "Is Kevin throwing a football now?",
+   "page": "p.88",
+   "star": true,
+   "say": "Is Kevin throwing a football now?"
+  },
+  {
+   "id": "en6-164",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Kevin is throwing a football now. を否定文にしよう。",
+   "a": "Kevin is not throwing a football now.",
+   "accept": [
+    "Kevin isn't throwing a football now."
+   ],
+   "page": "p.88",
+   "star": true,
+   "say": "Kevin is not throwing a football now."
+  },
+  {
+   "id": "en6-165",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Is Kevin throwing a football now? に「はい」で答えよう。",
+   "a": "Yes, he is.",
+   "page": "p.88",
+   "say": "Yes, he is."
+  },
+  {
+   "id": "en6-166",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Is Kevin throwing a football now? に「いいえ」で答えよう。",
+   "a": "No, he is not.",
+   "accept": [
+    "No, he isn't.",
+    "No, he's not."
+   ],
+   "page": "p.88",
+   "say": "No, he is not."
+  },
+  {
+   "id": "en6-167",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Satoshi, are you studying? —Yes, (　)(　).",
+   "a": "I am",
+   "accept": [
+    "Yes, I am."
+   ],
+   "page": "p.88",
+   "say": "Yes, I am."
+  },
+  {
+   "id": "en6-168",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "ふつう進行形にしない動詞はどれ？",
+   "a": "like",
+   "wrong": [
+    "play",
+    "eat",
+    "study"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "like（好き）、know（知っている）、see（見える）など状態を表す動詞は、ふつう進行形にしない。"
+  },
+  {
+   "id": "en6-169",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "I (　) cats.（ねこが好きです）",
+   "a": "like",
+   "wrong": [
+    "am liking",
+    "liking",
+    "am like"
+   ],
+   "page": "p.88",
+   "star": true
+  },
+  {
+   "id": "en6-170",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "I (　) Kevin.（ケビンを知っています）",
+   "a": "know",
+   "wrong": [
+    "am knowing",
+    "knowing",
+    "am know"
+   ],
+   "page": "p.88",
+   "star": true
+  },
+  {
+   "id": "en6-171",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Look! Mark (　) a sandwich now.",
+   "a": "is eating",
+   "wrong": [
+    "eats",
+    "eat",
+    "eating"
+   ],
+   "page": "p.88",
+   "star": true
+  },
+  {
+   "id": "en6-172",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "At my school, all students (　) a foreign language.（ふだんのこと）",
+   "a": "study",
+   "wrong": [
+    "are studying",
+    "studies",
+    "studying"
+   ],
+   "page": "p.86-87",
+   "star": true,
+   "ex": "ふだんの習慣は現在形。今している最中のことは現在進行形。"
+  },
+  {
+   "id": "en6-173",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Everyone (　) a different schedule.",
+   "a": "has",
+   "wrong": [
+    "have",
+    "is having",
+    "are having"
+   ],
+   "page": "p.81",
+   "star": true
+  },
+  {
+   "id": "en6-174",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "This is (　) cute eraser.　空らんに入るのは？",
+   "a": "a",
+   "wrong": [
+    "an",
+    "the",
+    "なし"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "ふつうの1つのもの → a"
+  },
+  {
+   "id": "en6-175",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "It's (　) iguana.　空らんに入るのは？",
+   "a": "an",
+   "wrong": [
+    "a",
+    "the",
+    "なし"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "母音（ア・イ・ウ・エ・オの音）で始まる語の前は an"
+  },
+  {
+   "id": "en6-176",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "I play (　) tennis.　空らんに入るのは？",
+   "a": "なし",
+   "wrong": [
+    "a",
+    "an",
+    "the"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "スポーツには冠詞をつけない"
+  },
+  {
+   "id": "en6-177",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "I go to (　) school.　空らんに入るのは？",
+   "a": "なし",
+   "wrong": [
+    "a",
+    "an",
+    "the"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "建物ではなく『勉強しに行く』目的を表すときは冠詞をつけない"
+  },
+  {
+   "id": "en6-178",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Let's go by (　) bus.　空らんに入るのは？",
+   "a": "なし",
+   "wrong": [
+    "a",
+    "an",
+    "the"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "〈by＋交通手段〉は冠詞をつけない"
+  },
+  {
+   "id": "en6-179",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Do you have (　) pen?（どのペンでもいいから貸して）　空らんに入るのは？",
+   "a": "a",
+   "wrong": [
+    "an",
+    "the",
+    "なし"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "不特定の1つ → a"
+  },
+  {
+   "id": "en6-180",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "Do you have (　) pen?（さっき貸したあのペン）　空らんに入るのは？",
+   "a": "the",
+   "wrong": [
+    "a",
+    "an",
+    "なし"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "おたがいにわかっている特定のもの → the"
+  },
+  {
+   "id": "en6-181",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "I like (　) math.　空らんに入るのは？",
+   "a": "なし",
+   "wrong": [
+    "a",
+    "an",
+    "the"
+   ],
+   "page": "p.88",
+   "star": true,
+   "ex": "科目には冠詞をつけない"
+  },
+  {
+   "id": "en6-182",
+   "type": "choice",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "This is my book. で、my の前に a や the をつけない理由は？",
+   "a": "my や your がついているときは冠詞をつけないから",
+   "wrong": [
+    "book は数えられないから",
+    "本はスポーツの道具だから",
+    "文の最初ではないから"
+   ],
+   "page": "p.88"
+  },
+  {
+   "id": "en6-183",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "英語にしよう：「私は数学を勉強しています。」",
+   "a": "I am studying math.",
+   "accept": [
+    "I'm studying math."
+   ],
+   "page": "p.88",
+   "say": "I am studying math."
+  },
+  {
+   "id": "en6-184",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "英語にしよう：「彼は自分の部屋で勉強しています。」",
+   "a": "He is studying in his room.",
+   "accept": [
+    "He's studying in his room."
+   ],
+   "page": "p.88",
+   "say": "He is studying in his room."
+  },
+  {
+   "id": "en6-185",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "英語にしよう：「あなたは勉強していますか。」",
+   "a": "Are you studying?",
+   "page": "p.88",
+   "say": "Are you studying?"
+  },
+  {
+   "id": "en6-186",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "英語にしよう：「私はチョコレートケーキがほしいです。」",
+   "a": "I want chocolate cake.",
+   "page": "p.88",
+   "say": "I want chocolate cake."
+  },
+  {
+   "id": "en6-187",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "英語にしよう：「私は今テニスをしていません。」",
+   "a": "I am not playing tennis now.",
+   "accept": [
+    "I'm not playing tennis now."
+   ],
+   "page": "p.88",
+   "say": "I am not playing tennis now."
+  },
+  {
+   "id": "en6-188",
+   "type": "order",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "「サトシは自分の部屋で勉強しています。」",
+   "items": [
+    "Satoshi",
+    "is",
+    "studying",
+    "in",
+    "his",
+    "room."
+   ],
+   "page": "p.88",
+   "say": "Satoshi is studying in his room.",
+   "inline": true
+  },
+  {
+   "id": "en6-189",
+   "type": "order",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "「ケビンは今フットボールを投げていません。」",
+   "items": [
+    "Kevin",
+    "is",
+    "not",
+    "throwing",
+    "a",
+    "football",
+    "now."
+   ],
+   "page": "p.88",
+   "star": true,
+   "say": "Kevin is not throwing a football now.",
+   "inline": true
+  },
+  {
+   "id": "en6-190",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "Kevin is throwing a football now.",
+   "page": "p.88",
+   "star": true,
+   "say": "Kevin is throwing a football now.",
+   "listen": true
+  },
+  {
+   "id": "en6-191",
+   "type": "term",
+   "sec": "文法（現在進行形・冠詞）",
+   "q": "🔊 を押して、聞こえた英語を書こう。",
+   "a": "I'm studying math.",
+   "page": "p.88",
+   "say": "I'm studying math.",
+   "listen": true
+  }
+ ]
+}
