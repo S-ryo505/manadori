@@ -167,6 +167,9 @@ h2{font-size:17px;margin:24px 6px 4px}
 .excard .hl{color:var(--pri-deep);background:linear-gradient(transparent 60%,var(--pri-soft) 60%)}
 @media (prefers-color-scheme:dark){.excard .hl{color:var(--pri)}}
 .warn{background:var(--ng-soft);border:2px solid var(--ng)}
+.verdict.mid{color:var(--star)}
+.btn.unsure{margin-top:10px;min-height:46px;font-size:14px;border-style:dashed}
+.btn.unsure.on{background:var(--star-soft);color:var(--star);border-color:var(--star)}
 /* トップページ */
 .greet{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
 .bubble{flex:1;background:var(--card);border-radius:22px;padding:12px 16px;box-shadow:var(--shadow);position:relative;font-weight:700}
@@ -203,7 +206,7 @@ h2{font-size:17px;margin:24px 6px 4px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.3.1";
+const APP_VER = "1.4.0";
 const KEY = "manadori:v1";
 const INTERVALS = [0, 1, 3, 7, 14, 30];
 const SUBJECTS = ["社会", "英語", "理科"];
@@ -220,7 +223,7 @@ const MIX_LABEL = {few:"少なめ", mid:"ふつう", many:"多め"};
 /* ---------- 学習記録（localStorage） ---------- */
 function defaults(){
   return { prog:{}, days:{}, tests:[], ui:{subj:""},
-    settings:{ examDate:"", newPerDay:15, sessionMax:30, answerMode:"type", mix:{社会:"many", 英語:"mid", 理科:"mid"} } };
+    settings:{ examDate:"", newPerDay:15, sessionMax:30, answerMode:"type", requireWrite:true, mix:{社会:"many", 英語:"mid", 理科:"mid"} } };
 }
 let DB = defaults();
 let LEGACY_SETS = null;
@@ -300,16 +303,23 @@ function prog(id){ return DB.prog[id]; }
 function boxOf(id){ const p=DB.prog[id]; return p?p.box:0; }
 function dayRec(){ const t=today(); const d=DB.days[t]||(DB.days[t]={n:0,c:0}); d.subj ||= {}; return d; }
 
-function grade(q, ok, soft){
+/* 採点 → 次の出題日。ex.unsure＝わからない／自信なし（明日もう1回）、ex.fmt＝出題形式 */
+function needsWrite(q){ return DB.settings.requireWrite!==false && (q.fmts||formatsOf(q)).includes("write"); }
+function grade(q, ok, soft, ex){
+  ex=ex||{}; const unsure=!!ex.unsure, fmt=ex.fmt||q.fmt;
   const t=today(), p=DB.prog[q.id]||{box:0,n:0,c:0,hist:""};
-  p.n++; if(ok) p.c++;
-  if(ok && soft) p.box=Math.max(1,p.box); else p.box = ok ? Math.min(p.box+1,5) : 1;
-  let due=addDays(t, ok&&soft ? 1 : INTERVALS[p.box]);
+  const good=ok&&!unsure;
+  p.n++; if(good) p.c++;
+  p.fmt=p.fmt||{}; if(fmt){ p.fmt[fmt]=(good&&!soft)?1:0; p.lastFmt=fmt; }
+  if(unsure || !ok) p.box=1;
+  else if(soft) p.box=Math.max(1,p.box);
+  else { p.box=Math.min(p.box+1,5); if(needsWrite(q) && p.fmt.write!==1) p.box=Math.min(p.box,2); }   // 書いて正解するまでは「定着」にしない
+  let due=addDays(t, (unsure||(ok&&soft)) ? 1 : INTERVALS[p.box]);
   const e=DB.settings.examDate;
   if(e && e>t){ const lim=addDays(e,-1); if(due>lim) due = lim>addDays(t,1)?lim:addDays(t,1); }
-  p.due=due; p.last=t; p.hist=(p.hist+(ok?"1":"0")).slice(-10); DB.prog[q.id]=p;
-  const d=dayRec(); d.n++; if(ok) d.c++;
-  const s=d.subj[q.subject]||(d.subj[q.subject]={n:0,c:0,nw:0}); s.n++; if(ok) s.c++;
+  p.due=due; p.last=t; p.hist=(p.hist+(good?"1":"0")).slice(-10); DB.prog[q.id]=p;
+  const d=dayRec(); d.n++; if(good) d.c++;
+  const s=d.subj[q.subject]||(d.subj[q.subject]={n:0,c:0,nw:0}); s.n++; if(good) s.c++;
   save();
 }
 
@@ -381,20 +391,61 @@ function makeDistractors(q, cands){
   return out.length===3 ? out : null;
 }
 function vocabPool(setId, key){ return SETS[setId].questions.filter(x=>x.vocab).map(x=>({s:x.vocab[key], sec:x.sec})); }
-function variant(q){
-  if(q.type==="calc"){ const g=GENS[q.gen]; return g ? Object.assign({},q,{calc:g()}) : Object.assign({},q,{type:"term",q:"（計算テンプレートなし）",a:"-"}); }
-  if(q.type!=="term" || !SETS[q.setId]) return q;
-  let p=MIXV[DB.settings.mix[q.subject]||"mid"]??.5;
-  const b=boxOf(q.id); if(b===0) p+=.15; else if(b>=3) p-=.2;     // 新しい問題は選ぶ多め、覚えてきたら書く多め
-  p=Math.min(.9,Math.max(.1,p));
-  if(Math.random()>=p) return Object.assign({},q,{mode:"write"});
-  if(q.vocab && Math.random()<.5){   // 読み：英語 → 意味
-    const wrong=makeDistractors({a:q.vocab.ja, sec:q.sec}, vocabPool(q.setId,"ja"));
-    if(wrong) return Object.assign({},q,{type:"choice", mode:"read", q:"この英語の意味は？", word:q.vocab.en, a:q.vocab.ja, accept:[], wrong, say:q.vocab.en, sayBefore:true});
+/* ---- 同じ問題を、毎回ちがう聞き方で出す ----
+   term   : pick（選ぶ）/ write（書く）/ read（英語→意味、英単語だけ）
+   choice : choice（選ぶ）/ write（答えが短い用語なら書く）
+   order  : order（ならべる）/ write（英文をまるごと書く、英語の並べ替えだけ）
+   まだ正解していない形式を優先し、前回と同じ形式はなるべく避ける。書く形式で正解するまで「定着」にしない。 */
+function canWriteChoice(q){
+  const a=String(q.a||"");
+  if(!a || /^[①-⑳]/.test(a) || a==="なし" || ARTICLES.includes(a.toLowerCase())) return false;
+  if(/どれ|選ぼう|選んで|ないもの|正しくない|正しいもの|として正しい/.test(q.q)) return false;
+  if(isEn(a) && !hasJa(a)) return a.length<=40 && (/（　+）|\(　+\)/.test(q.q) || /英語は？/.test(q.q));
+  return [...a].length<=8 && !/[、。・とやの（(〜～％%！!？?]/.test(a) && !/ごろ$|^約/.test(a);
+}
+function formatsOf(q){
+  if(q.fmts) return q.fmts;
+  if(q.type==="term") return q.vocab ? ["pick","read","write"] : ["pick","write"];
+  if(q.type==="choice") return canWriteChoice(q) ? ["choice","write"] : ["choice"];
+  if(q.type==="order") return q.inline ? ["order","write"] : ["order"];
+  return [q.type];
+}
+function chooseFmt(q, fmts){
+  if(fmts.length===1) return fmts[0];
+  const recog=fmts.filter(f=>f!=="write"), p=prog(q.id);
+  if(!p) return pick(recog);                                   // 初めての問題は「選ぶ」から
+  const F=p.fmt||{}, notOk=fmts.filter(f=>F[f]!==1);
+  if(notOk.length){
+    let c=notOk.filter(f=>f!==p.lastFmt); if(!c.length) c=notOk;
+    if(c.includes("write") && recog.some(f=>F[f]===1)) return "write";   // 選べたら、次は書く
+    return pick(c);
   }
-  const wrong=makeDistractors(q, q.vocab ? vocabPool(q.setId,"en") : answerPool(q.setId));
-  if(!wrong) return Object.assign({},q,{mode:"write"});
-  return Object.assign({},q,{type:"choice", mode:"pick", q:q.q.replace(/書こう/g,"選ぼう"), wrong, sayBefore:!!q.listen});
+  let c=fmts.filter(f=>f!==p.lastFmt); if(!c.length) c=fmts;  // ぜんぶの形式で正解済み → 前回とちがう形式で
+  const rw=MIXV[DB.settings.mix[q.subject]||"mid"]??.5;
+  const w=c.map(f=>f==="write"?1-rw:rw/Math.max(1,c.filter(x=>x!=="write").length));
+  let r=Math.random()*w.reduce((a,b)=>a+b,0); for(let i=0;i<c.length;i++){ r-=w[i]; if(r<=0) return c[i]; } return c[c.length-1];
+}
+function buildFmt(q, f){
+  const base={fmt:f, fmts:formatsOf(q)};
+  if(q.type==="term"){
+    if(f==="write") return Object.assign({},q,base,{mode:"write"});
+    if(f==="read"){ const wrong=makeDistractors({a:q.vocab.ja, sec:q.sec}, vocabPool(q.setId,"ja"));
+      return wrong ? Object.assign({},q,base,{type:"choice", mode:"read", q:"この英語の意味は？", word:q.vocab.en, a:q.vocab.ja, accept:[], wrong, say:q.vocab.en}) : null; }
+    const wrong=makeDistractors(q, q.vocab ? vocabPool(q.setId,"en") : answerPool(q.setId));
+    return wrong ? Object.assign({},q,base,{type:"choice", mode:"pick", q:q.q.replace(/書こう/g,"選ぼう"), wrong}) : null;
+  }
+  if(q.type==="choice" && f==="write")
+    return Object.assign({},q,base,{type:"term", mode:"write", q:q.q.replace(/選ぼう/g,"書こう"), accept:[], wrong:undefined});
+  if(q.type==="order" && f==="write")
+    return Object.assign({},q,base,{type:"term", mode:"write", q:q.q+"\nこの文を英語で書こう。", a:q.items.join(" "), accept:[], say:q.say||q.items.join(" ")});
+  return Object.assign({},q,base);
+}
+function variant(q){
+  if(q.type==="calc"){ const g=GENS[q.gen]; return g ? Object.assign({},q,{calc:g(), fmt:"calc", fmts:["calc"]}) : Object.assign({},q,{type:"term",q:"（計算テンプレートなし）",a:"-"}); }
+  if(!SETS[q.setId]) return q;
+  const fmts=formatsOf(q); let f=chooseFmt(q,fmts), v=buildFmt(q,f);
+  if(!v){ for(const g of shuffle(fmts)){ if(g!==f && (v=buildFmt(q,g))) break; } }
+  return v || Object.assign({},q,{fmt:"write", fmts, mode:"write"});
 }
 function termCheck(q, input){
   const cands=[q.a].concat(q.accept||[]);
@@ -625,7 +676,7 @@ function renderHome(){
       <button class="tile" onclick="go('#test-setup')"><span class="ic">📝</span><b>模擬テスト</b></button>
       <button class="tile" onclick="go('#stats')"><span class="ic">📊</span><b>記録</b></button>
     </div>
-    <p class="hint" style="text-align:center">選択式 ${MIX_LABEL[DB.settings.mix[SUBJ]||"mid"]}・書く問題は${DB.settings.answerMode==="pad"?"手書きパッド":DB.settings.answerMode==="recall"?"思い出すだけ":"入力して自動採点"}（設定で変更）</p>`;
+    <p class="hint" style="text-align:center">同じ問題も「選ぶ・書く」など毎回ちがう聞き方で出ます。書く問題は${DB.settings.answerMode==="pad"?"手書きパッド":DB.settings.answerMode==="recall"?"思い出すだけ":"入力して自動採点"}（設定で変更）</p>`;
 }
 
 /* ---------- 練習 ---------- */
@@ -636,25 +687,36 @@ function startSession(list, mode, title){
 }
 function startDaily(){ const p=dailyPlan(SUBJ); startSession(shuffle(p.due.concat(p.fresh)),"daily","今日の"+SUBJ); }
 function curQ(){ return session.list[session.i]; }
-function answerQ(ok, note, soft){
+function requeue(q){ if(session.again[q.id]) return; session.again[q.id]=true; const o=allQ(q.subject).find(x=>x.id===q.id); if(o) session.list.push(Object.assign(variant(o),{retry:true})); }
+function answerQ(ok, note, soft, unsure){
   const q=curQ(), st=session.state;
-  st.done=true; st.ok=ok; st.soft=!!(ok&&soft); st.note=note||"";
+  st.done=true; st.ok=ok&&!unsure; st.unsure=!!unsure; st.soft=!!(ok&&soft&&!unsure); st.note=note||"";
   if(!session.graded[q.id]){
     const wasNew=!prog(q.id);
     st.prev = DB.prog[q.id] ? JSON.parse(JSON.stringify(DB.prog[q.id])) : null;
-    session.graded[q.id]=true; grade(q, ok, soft);
+    session.graded[q.id]=true; grade(q, ok, soft, {unsure, fmt:q.fmt});
     if(wasNew){ const s=dayRec().subj[q.subject]; s.nw=(s.nw||0)+1; save(); }
-    session.results.push({q, ok});
+    session.results.push({q, ok:ok&&!unsure, unsure:!!unsure});
   }
-  if(!ok && !session.again[q.id]){ session.again[q.id]=true; const o=allQ(q.subject).find(x=>x.id===q.id); if(o) session.list.push(Object.assign(variant(o),{retry:true})); }
+  if(!ok || unsure) requeue(q);
   renderQuiz();
-  if(ok) sparkle();
+  if(ok && !unsure) sparkle();
+}
+function giveUp(){ const st=session.state; st.input=""; st.reveal=true; st.checks=st.checks||(curQ().points||[]).map(()=>false); answerQ(false,"",false,true); }
+function markUnsure(){   // 正解したけど自信がなかった（まぐれ）→ 明日もう1回
+  const q=curQ(), st=session.state;
+  if("prev" in st){ if(st.prev) DB.prog[q.id]=st.prev; else delete DB.prog[q.id];
+    const d=dayRec(); d.n=Math.max(0,d.n-1); d.c=Math.max(0,d.c-1); const s=d.subj[q.subject]; if(s){ s.n=Math.max(0,s.n-1); s.c=Math.max(0,s.c-1); }
+    grade(q, true, false, {unsure:true, fmt:q.fmt}); delete st.prev; }
+  const r=session.results.find(x=>x.q.id===q.id); if(r){ r.ok=false; r.unsure=true; }
+  st.ok=false; st.unsure=true; st.soft=false; requeue(q); renderQuiz();
 }
 function nextQ(){ stopAll(); session.i++; session.state={}; if(session.i>=session.list.length){ go("#done"); return; } renderQuiz(); }
 function quitSession(){ if(confirm("練習をやめますか？（ここまでの記録は保存されています）")){ session=null; go("#home"); } }
 function inputAttrs(en){ return en ? `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" lang="en" placeholder="英語で入力"` : `autocomplete="off" spellcheck="false" placeholder="答えを入力"`; }
 function kindPill(q){
   if(q.mode==="read") return `<span class="pill kind">👀 読み</span>`;
+  if(q.fmt==="write" && (q.fmts||[]).length>1) return `<span class="pill kind">✍️ 書く</span>`;
   if(q.type==="choice") return `<span class="pill kind">☝️ 選ぶ</span>`;
   if(q.type==="term"||q.type==="write") return `<span class="pill kind">✍️ 書く</span>`;
   if(q.type==="order") return `<span class="pill kind">🧩 ならべる</span>`;
@@ -677,12 +739,15 @@ function renderQuiz(){
     + (q.say && !sayFirst && !st.done ? `<button class="speak slow" data-say="${esc(encodeURIComponent(q.say))}" onclick="session.state.hint=true;speak(decodeURIComponent(this.dataset.say),false,this)">🔊 発音を聞く（ヒント）</button>` : "");
   const sayAfter = q.say && !sayFirst ? sayBtns(q.say) : "";
   const after = st.done ? `
-      <div class="verdict ${st.ok?"ok pop":"ng pop"}">${st.ok?(st.soft?"🔺 ヒントありで正解":"⭕ 正解！"):"💦 ざんねん"}</div>
+      <div class="verdict ${st.unsure?"mid pop":st.ok?"ok pop":"ng pop"}">${st.unsure?"🤔 だいじょうぶ、明日もう1回出すね":st.ok?(st.soft?"🔺 ヒントありで正解":"⭕ 正解！"):"💦 ざんねん"}</div>
+      ${st.ok && !st.soft ? `<button class="btn ghost unsure" onclick="markUnsure()">🤔 じつは自信なかった（明日もう1回）</button>` : ""}
       ${st.note?`<div class="ex" style="color:var(--star)">✏️ ${esc(st.note)}</div>`:""}
       ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${sayAfter}${exCard(q)}
       <div class="ex">📘 教科書 ${esc(q.page||"")}</div>
       <div class="spacer"></div><button class="btn" onclick="nextQ()">次へ ▶</button>` : "";
   const hintBox = st.hint ? `<div class="hintline ${en?"ans-en":""}">ヒント：${esc(hintText(q.a))}</div>` : "";
+  const unsureBtn = `<button class="btn ghost unsure" onclick="giveUp()">🤔 わからない（明日もう1回）</button>`;
+  const unsureBtn2 = `<button class="btn ghost unsure" onclick="giveUp()">🤔 自信ない（明日もう1回）</button>`;
   const ansBox = mine=>`<div class="answer"><div class="muted">答え</div><div class="a ${en?"ans-en":""}">${esc(q.a)}</div>${mine||""}</div>`;
   let body="";
   if(q.type==="term"){
@@ -691,23 +756,23 @@ function renderQuiz(){
         ? ansBox(`<div class="muted">あなたの答え：${esc(st.input||"（空欄）")}</div>`)
           +(!st.ok?`<button class="btn ghost" style="margin-top:10px;font-size:14px" onclick="fixOk()">書き方のちがいだけなので正解にする</button>`:"")+after
         : `${hintBox}<input class="field ${en?"ans-en":""}" id="inp" ${inputAttrs(en)} enterkeyhint="done" value="${esc(st.input||"")}" oninput="session.state.input=this.value">
-          <div class="spacer"></div><div class="row"><button class="btn ghost" onclick="termGiveUp()">わからない</button>
+          <div class="spacer"></div><div class="row"><button class="btn ghost" onclick="termGiveUp()">🤔 わからない</button>
           ${st.hint?"":`<button class="btn sub" onclick="session.state.hint=true;renderQuiz()">ヒント</button>`}
           <button class="btn" onclick="termSubmit()">答える</button></div>`);
     }else if(mode==="pad"){
       body=qhead+(!st.reveal
         ? `${hintBox}${padHTML()}<div class="spacer"></div><div class="row">
             ${st.hint?"":`<button class="btn sub" onclick="session.state.hint=true;renderQuiz()">ヒント</button>`}
-            <button class="btn" onclick="padReveal()">答え合わせ</button></div>`
+            <button class="btn" onclick="padReveal()">答え合わせ</button></div>${unsureBtn}`
         : `${st.padImg?`<img class="mine" src="${st.padImg}" alt="あなたの答え">`:`<p class="muted">（書かずに答えを見ました）</p>`}${ansBox("")}
           ${st.done?after:`<p class="hint">自分の字と答えをくらべよう。漢字やつづりのまちがいも×にしよう。</p><div class="row">
             <button class="btn ng" onclick="answerQ(false)">✕ まちがえた</button>
-            <button class="btn ok" onclick="answerQ(true,'',session.state.hint)">○ 書けた</button></div>`}`);
+            <button class="btn ok" onclick="answerQ(true,'',session.state.hint)">○ 書けた</button></div>${unsureBtn2}`}`);
     }else{
       body=qhead+(!st.reveal
         ? `<p class="hint">頭の中で答えを思い出してから、ボタンを押そう</p><button class="btn" onclick="session.state.reveal=true;renderQuiz()">答えを見る</button>`
         : ansBox("")+(st.done?after:`<div class="spacer"></div><div class="row"><button class="btn ng" onclick="answerQ(false)">✕ まちがえた</button>
-              <button class="btn ok" onclick="answerQ(true,'',session.state.hint)">○ できた</button></div>`));
+              <button class="btn ok" onclick="answerQ(true,'',session.state.hint)">○ できた</button></div>${unsureBtn2}`));
     }
   }
   else if(q.type==="choice"){
@@ -715,7 +780,7 @@ function renderQuiz(){
     const enOpts=st.opts.every(o=>isEn(o)&&!hasJa(o));
     body=qhead+`<div class="choices">${st.opts.map((o,i)=>{
         let c="choice"+(enOpts?" ans-en":""); if(st.done){ if(o===q.a) c+=" right"; else if(o===st.pick) c+=" wrong"; }
-        return `<button class="${c}" ${st.done?"disabled":""} onclick="pickChoice(${i})">${esc(o)}</button>`;}).join("")}</div>${after}`;
+        return `<button class="${c}" ${st.done?"disabled":""} onclick="pickChoice(${i})">${esc(o)}</button>`;}).join("")}</div>${st.done?"":unsureBtn}${after}`;
   }
   else if(q.type==="order"){
     if(!st.pool){ st.pool=shuffle(q.items.map((t,i)=>i)); st.ans=[]; }
@@ -724,12 +789,12 @@ function renderQuiz(){
       <div class="slots${inl?" inline":""}">${st.ans.map((ix,k)=>{ let c="slot"+cls; if(done) c+=(q.items[ix]===q.items[k]?" right":" wrong");
         return `<button class="${c}" ${done?"disabled":""} onclick="orderBack(${k})">${inl?"":`<span class="n">${k+1}</span>`}<span>${esc(q.items[ix])}</span></button>`;}).join("")||'<span class="muted">ここに並びます</span>'}</div>
       ${!done?`<div class="chips">${st.pool.map((ix,k)=>`<button class="chip${cls}" onclick="orderPick(${k})">${esc(q.items[ix])}</button>`).join("")}</div>
-        <div class="spacer"></div><button class="btn" ${st.pool.length?"disabled":""} onclick="orderCheck()">答え合わせ</button>`
-      :`${!st.ok?`<div class="answer"><div class="muted">正しい順番</div>${inl?`<div class="a ans-en" style="font-size:19px">${esc(q.items.join(" "))}</div>`:q.items.map((t,k)=>`<div>${k+1}. ${esc(t)}</div>`).join("")}</div>`:""}${after}`}`;
+        <div class="spacer"></div><button class="btn" ${st.pool.length?"disabled":""} onclick="orderCheck()">答え合わせ</button>${unsureBtn}`
+      :`${!st.ok||st.unsure?`<div class="answer"><div class="muted">正しい順番</div>${inl?`<div class="a ans-en" style="font-size:19px">${esc(q.items.join(" "))}</div>`:q.items.map((t,k)=>`<div>${k+1}. ${esc(t)}</div>`).join("")}</div>`:""}${after}`}`;
   }
   else if(q.type==="write"){
     body=qhead+(!st.reveal?`<textarea class="field" id="wr" placeholder="書いてみよう（ノートに書いてもOK）">${esc(st.text||"")}</textarea>
-          <div class="spacer"></div><button class="btn" onclick="writeReveal()">模範解答を見る</button>`
+          <div class="spacer"></div><button class="btn" onclick="writeReveal()">模範解答を見る</button>${unsureBtn}`
       :`${st.text?`<div class="card" style="margin:12px 0 0;white-space:pre-wrap"><div class="muted">あなたの答え</div>${esc(st.text)}</div>`:""}
         <div class="answer" style="white-space:pre-wrap"><div class="muted">模範解答</div>${esc(q.a)}</div>
         <div class="muted" style="margin-top:14px">書けた（言えた）ポイントにチェックしよう</div>
@@ -741,7 +806,7 @@ function renderQuiz(){
     body=`<div class="q">${esc(c.q)}</div>${st.done?`<div class="answer"><div class="muted">答え</div><div class="a">${c.ans} ${esc(c.unit)}</div>
           <div class="muted">あなたの答え：${esc(st.input||"（空欄）")}</div><div style="white-space:pre-wrap;margin-top:8px;font-size:15px">${esc(c.steps)}</div></div>${after}`
       :`<div class="row" style="align-items:center;margin-top:14px"><input class="field" style="margin:0" id="inp" inputmode="decimal" placeholder="数字で答える"><span style="flex:0 0 auto;font-weight:700">${esc(c.unit)}</span></div>
-          <div class="spacer"></div><div class="row"><button class="btn ghost" onclick="session.state.input='';answerQ(false)">わからない</button><button class="btn" onclick="calcSubmit()">答える</button></div>`}`;
+          <div class="spacer"></div><div class="row"><button class="btn ghost" onclick="giveUp()">🤔 わからない</button><button class="btn" onclick="calcSubmit()">答える</button></div>`}`;
   }
   app().innerHTML=head+`<div class="card">${tags}${body}</div>`;
   const inp=$("#inp");
@@ -751,7 +816,7 @@ function renderQuiz(){
 }
 function pickChoice(i){ const st=session.state, q=curQ(); st.pick=st.opts[i]; answerQ(st.pick===q.a,"",st.hint); }
 function termSubmit(){ const st=session.state, v=$("#inp").value, r=termCheck(curQ(), v); st.input=v; answerQ(r.ok, r.note, st.hint); }
-function termGiveUp(){ session.state.input=""; answerQ(false); }
+function termGiveUp(){ giveUp(); }
 function padReveal(){ const st=session.state, c=$("#pad"); st.padImg=(st.strokes&&st.strokes.length&&c)?c.toDataURL("image/png"):null; st.reveal=true; renderQuiz(); }
 function fixOk(){
   const q=curQ(), st=session.state;
@@ -770,12 +835,13 @@ function writeReveal(){ const st=session.state; st.text=$("#wr").value.trim(); s
 function writeJudge(){ const st=session.state, q=curQ(), n=st.checks.filter(Boolean).length; answerQ(n>=Math.ceil(q.points.length*0.6), `ポイント ${n}/${q.points.length}`); }
 
 function renderDone(){
-  const r=session.results, ok=r.filter(x=>x.ok).length, ng=r.filter(x=>!x.ok), rate=r.length?ok/r.length:0;
+  const r=session.results, ok=r.filter(x=>x.ok).length, ng=r.filter(x=>!x.ok), rate=r.length?ok/r.length:0, uns=r.filter(x=>x.unsure).length;
   const msg = rate>=.9?"かんぺき！✨ すごいね！": rate>=.7?"いい調子！その調子でいこう！": rate>=.5?"あと少し！まちがえた問題は明日また出るよ":"大丈夫、くり返せばちゃんと覚えられるよ";
   app().innerHTML=`${topbar(esc(session.title)+" おわり","#home")}
     <div class="card done-head">${doriSVG(rate>=.7?"cheer":"happy",110)}
       <div class="score">${ok}<span style="font-size:24px"> / ${r.length}</span></div><p style="margin:6px 0 0"><b>${msg}</b></p></div>
-    ${ng.length?`<h2>まちがえた問題</h2><div class="card list">${ng.map(x=>`<div class="it"><div class="t">
+    ${uns?`<p class="hint" style="text-align:center">🤔 わからない・自信なし：${uns}問（明日もう1回出ます）</p>`:""}
+    ${ng.length?`<h2>まちがえた・自信なしの問題</h2><div class="card list">${ng.map(x=>`<div class="it"><div class="t">
         <div style="font-size:15px">${qtext(x.q.type==="calc"?x.q.calc.q:x.q.mode==="read"?x.q.word+" の意味":x.q.q)}</div>
         <div style="font-weight:700;color:var(--pri-deep)">${esc(answerText(x.q))}</div></div></div>`).join("")}</div>`:""}
     <button class="btn" onclick="session=null;go('#home')">${esc(SUBJ)}のページへ</button>`;
@@ -868,7 +934,7 @@ function startTest(){
   pk=pk.map(q=>Object.assign({},variant(q)));
   const secOrder=secs.map(s=>s.key), typeOrder={choice:0,term:1,calc:2,order:3,write:4};
   pk.sort((a,b)=>secOrder.indexOf(a.secKey)-secOrder.indexOf(b.secKey)||typeOrder[a.type]-typeOrder[b.type]);
-  test={ list:pk, ans:pk.map(()=>null), i:0, start:Date.now(), limit:tsel.min*60000, done:false, saved:false };
+  test={ list:pk, ans:pk.map(()=>null), uns:pk.map(()=>false), i:0, start:Date.now(), limit:tsel.min*60000, done:false, saved:false };
   clearInterval(testTimer); testTimer=setInterval(tick,1000); go("#test");
 }
 function tick(){ if(!test||test.done){ clearInterval(testTimer); return; } const left=test.limit-(Date.now()-test.start), el=$("#tm");
@@ -892,7 +958,8 @@ function renderTest(){
       <h1 style="font-size:16px">模擬テスト　${test.i+1}/${N}</h1><span class="timer" id="tm">${fmt(left)}</span></div>
     <div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap">${kindPill(q)}<span class="pill">${esc(q.sec||q.unit)}</span></div>${imgTag(q)}
       <div class="q">問${test.i+1}　${q.type==="calc"?esc(q.calc.q):qtext(q.q)}</div>${q.mode==="read"?`<div class="word ans-en">${esc(q.word)}</div>`:""}
-      ${sayFirst?sayBtns(q.say,!!q.listen):""}${body}</div>
+      ${sayFirst?sayBtns(q.say,!!q.listen):""}${body}
+      <button class="btn ghost unsure ${test.uns[test.i]?"on":""}" onclick="test.uns[test.i]=!test.uns[test.i];renderTest()">${test.uns[test.i]?"🤔 自信なし（明日もう1回）✓":"🤔 自信なし の印をつける"}</button></div>
     <div class="row"><button class="btn sub" ${test.i?"":"disabled"} onclick="tMove(-1)">← 前へ</button>
       ${test.i<N-1?`<button class="btn" onclick="tMove(1)">次へ →</button>`:`<button class="btn ok" onclick="submitTest(false)">提出する</button>`}</div>
     <div class="card"><div class="muted">問題一覧（タップで移動）</div>
@@ -913,7 +980,7 @@ function submitTest(timeUp){
     if(q.type==="calc") return {ok:calcOk(a||"",q.calc.ans)?1:0};
     if(q.type==="order") return {ok:orderOk(q,a)?1:0};
     return {ok:0, self:true, checks:q.points.map(()=>false)}; });
-  test.list.forEach((q,k)=>{ if(q.type!=="write") grade(q, !!test.res[k].ok); });
+  test.list.forEach((q,k)=>{ if(q.type!=="write") grade(q, !!test.res[k].ok, false, {unsure:test.uns[k], fmt:q.fmt}); });
   saveTest(); go("#result");
 }
 function testScore(){ return Math.round(test.res.reduce((s,r)=>s+r.ok,0)/test.list.length*100); }
@@ -935,7 +1002,7 @@ function renderResult(){
     ${test.list.map((q,k)=>{ const r=test.res[k], a=test.ans[k];
       const mine = q.type==="order" ? (a&&a.length? (q.inline? a.map(ix=>q.items[ix]).join(" ") : a.map((ix,i)=>(i+1)+"."+q.items[ix]).join(" → ")) : "") : (a||"");
       return `<div class="card"><div style="display:flex;gap:8px;align-items:center">
-          <b style="font-size:20px;color:${r.self?"var(--star)":r.ok?"var(--ok)":"var(--ng)"}">${r.self?"✍️":r.ok?"⭕":"❌"}</b>
+          <b style="font-size:20px;color:${r.self?"var(--star)":r.ok?"var(--ok)":"var(--ng)"}">${r.self?"✍️":r.ok?"⭕":"❌"}</b>${test.uns[k]?`<span class="pill star">🤔 自信なし→明日もう1回</span>`:""}
           <span class="muted">問${k+1}　${esc(q.sec||"")}　📘${esc(q.page||"")}</span></div>${imgTag(q,true)}
         <div style="font-weight:700;margin:6px 0">${q.type==="calc"?esc(q.calc.q):q.mode==="read"?esc(q.word)+" の意味は？":qtext(q.q)}</div>
         ${q.say?sayBtns(q.say):""}
@@ -947,7 +1014,7 @@ function renderResult(){
         ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${exCard(q)}</div>`;}).join("")}
     <button class="btn" onclick="finishTest()">完了 ▶</button>`;
 }
-function finishTest(){ test.list.forEach((q,k)=>{ if(q.type==="write") grade(q, test.res[k].ok>=0.6); }); test=null; go("#home"); }
+function finishTest(){ test.list.forEach((q,k)=>{ if(q.type==="write") grade(q, test.res[k].ok>=0.6, false, {unsure:test.uns[k], fmt:q.fmt}); }); test=null; go("#home"); }
 
 /* ---------- 記録 ---------- */
 function renderStats(){
@@ -966,7 +1033,7 @@ function renderStats(){
         <div><div class="big">${L.rate??"-"}${L.rate!==null?"％":""}</div><div class="muted">正答率</div></div></div>${lvBar(L.lv)}</div>
     ${Object.entries(byUnit).map(([u,ss])=>`<div class="card"><b>${esc(u)}</b><table><tr><th>範囲</th><th class="r">正答率</th><th class="r">定着</th></tr>
       ${ss.map(s=>{const x=secStats(s.qs); return `<tr><td>${esc(s.sec)}</td><td class="r">${x.rate??"-"}${x.rate!==null?"％":""}</td><td class="r">${x.lv[2]}/${s.qs.length}</td></tr>`;}).join("")}</table></div>`).join("")}
-    <p class="hint" style="margin:0 6px">「定着」＝3回以上続けて正解した問題</p>
+    <p class="hint" style="margin:0 6px">「定着」＝3回以上続けて正解した問題（書ける問題は、書く形式で正解したものだけ）</p>
     <div class="card"><b>最近4週間</b><div class="muted">色が濃いほどたくさん解いた日</div><div class="cal">${cal}</div></div>
     <div class="card"><b>模擬テストの記録</b>
       ${tests.length?`<table><tr><th>日付</th><th>範囲</th><th class="r">得点</th></tr>
@@ -982,10 +1049,12 @@ const MODES=[
 function renderSettings(){
   const S=DB.settings, m=S.answerMode||"type", back=SUBJ&&location.hash==="#settings"&&history.length>1;
   app().innerHTML=topbar("⚙️ 設定", SUBJ?"#home":"#top")+`
-    <h2>選択式の多さ（教科ごと）</h2>
+    <h2>問題の出し方</h2>
     <div class="card">${subjectsAll().map(s=>`<div style="display:flex;align-items:center;gap:10px;margin:6px 0">
         <b style="width:4em">${theme(s).icon} ${esc(s)}</b><div class="seg" style="margin:0">${Object.keys(MIXV).map(k=>`<button class="${(S.mix[s]||"mid")===k?"on":""}" onclick="DB.settings.mix['${esc(s)}']='${k}';save();renderSettings()">${MIX_LABEL[k]}</button>`).join("")}</div></div>`).join("")}
-      <p class="hint">一問一答は「選ぶ」と「書く」がランダムに出ます。初めての問題は選ぶ問題が多め、覚えてくると書く問題が多めになります。英語の単語は「意味を選ぶ（読み）」も出ます。</p></div>
+      <p class="hint">同じ問題でも「選ぶ」「書く」「読み（英語→意味）」「ならべる」など、毎回ちがう聞き方で出ます。初めての問題は選ぶ形から始まり、選べたら次は書く形で出ます。ここの設定は、全部の形で正解したあとの出し方です。</p>
+      <label class="check"><input type="checkbox" ${S.requireWrite!==false?"checked":""} onchange="DB.settings.requireWrite=this.checked;save()">
+        <span><b>書いて正解するまで「定着」にしない</b><br><span class="muted">選択式でまぐれ当たりしても、定着あつかいにならないようにします（おすすめ）</span></span></label></div>
     <h2>書く問題の答え方</h2>
     <div class="card"><div class="mode">${MODES.map(([k,t,d])=>`<label class="${m===k?"on":""}"><input type="radio" name="am" ${m===k?"checked":""}
         onchange="DB.settings.answerMode='${k}';save();renderSettings()"><span><b>${t}</b><br><span class="muted">${d}</span></span></label>`).join("")}</div>
