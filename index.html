@@ -168,6 +168,8 @@ h2{font-size:17px;margin:24px 6px 4px}
 @media (prefers-color-scheme:dark){.excard .hl{color:var(--pri)}}
 .warn{background:var(--ng-soft);border:2px solid var(--ng)}
 .verdict.mid{color:var(--star)}
+.passage{margin-top:12px;padding:12px 14px;border-radius:18px;background:var(--pri-soft)}
+.passage .ptext{font-size:17px;font-weight:700;line-height:1.6;margin-top:4px}
 .btn.unsure{margin-top:10px;min-height:46px;font-size:14px;border-style:dashed}
 .btn.unsure.on{background:var(--star-soft);color:var(--star);border-color:var(--star)}
 /* トップページ */
@@ -206,7 +208,7 @@ h2{font-size:17px;margin:24px 6px 4px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.4.0";
+const APP_VER = "1.4.1";
 const KEY = "manadori:v1";
 const INTERVALS = [0, 1, 3, 7, 14, 30];
 const SUBJECTS = ["社会", "英語", "理科"];
@@ -400,6 +402,8 @@ function canWriteChoice(q){
   const a=String(q.a||"");
   if(!a || /^[①-⑳]/.test(a) || a==="なし" || ARTICLES.includes(a.toLowerCase())) return false;
   if(/どれ|選ぼう|選んで|ないもの|正しくない|正しいもの|として正しい/.test(q.q)) return false;
+  if(q.passage) return false;                                         // 読解問題は選ぶ形だけ
+  if(q.subject==="英語" && !(isEn(a) && !hasJa(a))) return false;     // 英語で日本語を書かせない
   if(isEn(a) && !hasJa(a)) return a.length<=40 && (/（　+）|\(　+\)/.test(q.q) || /英語は？/.test(q.q));
   return [...a].length<=8 && !/[、。・とやの（(〜～％%！!？?]/.test(a) && !/ごろ$|^約/.test(a);
 }
@@ -514,6 +518,13 @@ function exCard(q){
   else html=html.replace(re,"<b class='hl'>$1</b>");
   return `<div class="excard"><div class="muted">📝 例文${v.exSrc?`（教科書 ${esc(v.exSrc)}）`:""}</div>
     <div class="exen ans-en">${html}</div><div class="exja">${esc(v.exJa||"")}</div>${sayBtns(v.ex).replace("🔊 発音を聞く","🔊 例文を聞く")}</div>`;
+}
+
+/* ---------- 読解問題の英文 ---------- */
+function passageBox(q){
+  if(!q.passage) return "";
+  return `<div class="passage"><div class="muted">📖 英文を読んで答えよう</div>
+    <div class="ptext ans-en">${esc(q.passage).replace(/\n/g,"<br>")}</div>${sayBtns(q.passage.replace(/\n/g," ")).replace("🔊 発音を聞く","🔊 英文を聞く")}</div>`;
 }
 
 /* ---------- 画像の拡大 ---------- */
@@ -732,11 +743,11 @@ function renderQuiz(){
      ${q.star?`<span class="pill star">★ マーカー</span>`:""}${q.retry?`<span class="pill" style="background:var(--ng-soft);color:var(--ng)">もう一度</span>`:""}</div>`;
   // 答える前に出すのは「聞き取り」と「英語→意味（読み）」のボタンだけ。自動では鳴らさない
   const sayFirst = q.say && (q.listen || q.mode==="read");
-  const qhead = imgTag(q) + (q.mode==="read"
+  const qhead = imgTag(q) + passageBox(q) + (q.mode==="read"
       ? `<div class="q">${qtext(q.q)}</div><div class="word ans-en">${esc(q.word)}</div>`
       : `<div class="q ${isEn(q.q)&&!hasJa(q.q)?"ans-en":""}">${qtext(q.q)}</div>`)
     + (sayFirst ? sayBtns(q.say, !!q.listen) : "")
-    + (q.say && !sayFirst && !st.done ? `<button class="speak slow" data-say="${esc(encodeURIComponent(q.say))}" onclick="session.state.hint=true;speak(decodeURIComponent(this.dataset.say),false,this)">🔊 発音を聞く（ヒント）</button>` : "");
+    + (q.say && !sayFirst && !q.passage && !st.done ? `<button class="speak slow" data-say="${esc(encodeURIComponent(q.say))}" onclick="session.state.hint=true;speak(decodeURIComponent(this.dataset.say),false,this)">🔊 発音を聞く（ヒント）</button>` : "");
   const sayAfter = q.say && !sayFirst ? sayBtns(q.say) : "";
   const after = st.done ? `
       <div class="verdict ${st.unsure?"mid pop":st.ok?"ok pop":"ng pop"}">${st.unsure?"🤔 だいじょうぶ、明日もう1回出すね":st.ok?(st.soft?"🔺 ヒントありで正解":"⭕ 正解！"):"💦 ざんねん"}</div>
@@ -956,7 +967,7 @@ function renderTest(){
   const sayFirst = q.say && (q.listen || q.mode==="read");
   app().innerHTML=`<div class="top"><button class="back" onclick="go('#home')" aria-label="やめる">✕</button>
       <h1 style="font-size:16px">模擬テスト　${test.i+1}/${N}</h1><span class="timer" id="tm">${fmt(left)}</span></div>
-    <div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap">${kindPill(q)}<span class="pill">${esc(q.sec||q.unit)}</span></div>${imgTag(q)}
+    <div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap">${kindPill(q)}<span class="pill">${esc(q.sec||q.unit)}</span></div>${imgTag(q)}${passageBox(q)}
       <div class="q">問${test.i+1}　${q.type==="calc"?esc(q.calc.q):qtext(q.q)}</div>${q.mode==="read"?`<div class="word ans-en">${esc(q.word)}</div>`:""}
       ${sayFirst?sayBtns(q.say,!!q.listen):""}${body}
       <button class="btn ghost unsure ${test.uns[test.i]?"on":""}" onclick="test.uns[test.i]=!test.uns[test.i];renderTest()">${test.uns[test.i]?"🤔 自信なし（明日もう1回）✓":"🤔 自信なし の印をつける"}</button></div>
@@ -1003,7 +1014,7 @@ function renderResult(){
       const mine = q.type==="order" ? (a&&a.length? (q.inline? a.map(ix=>q.items[ix]).join(" ") : a.map((ix,i)=>(i+1)+"."+q.items[ix]).join(" → ")) : "") : (a||"");
       return `<div class="card"><div style="display:flex;gap:8px;align-items:center">
           <b style="font-size:20px;color:${r.self?"var(--star)":r.ok?"var(--ok)":"var(--ng)"}">${r.self?"✍️":r.ok?"⭕":"❌"}</b>${test.uns[k]?`<span class="pill star">🤔 自信なし→明日もう1回</span>`:""}
-          <span class="muted">問${k+1}　${esc(q.sec||"")}　📘${esc(q.page||"")}</span></div>${imgTag(q,true)}
+          <span class="muted">問${k+1}　${esc(q.sec||"")}　📘${esc(q.page||"")}</span></div>${imgTag(q,true)}${passageBox(q)}
         <div style="font-weight:700;margin:6px 0">${q.type==="calc"?esc(q.calc.q):q.mode==="read"?esc(q.word)+" の意味は？":qtext(q.q)}</div>
         ${q.say?sayBtns(q.say):""}
         <div class="muted" style="white-space:pre-wrap">あなたの答え：${esc(mine||"（空欄）")}</div>
