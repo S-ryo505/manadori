@@ -55,6 +55,7 @@ input,textarea,select{font:inherit;color:var(--ink)}
 @media (prefers-color-scheme:dark){.btn.sub{color:var(--pri)}}
 .row{display:flex;gap:10px}.row>*{flex:1}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.grid3.grid4{grid-template-columns:repeat(2,1fr)}
 .tile{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:14px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
 .tile:active{transform:scale(.96)}
 .tile .ic{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;font-size:24px;background:var(--pri-soft)}
@@ -170,6 +171,8 @@ h2{font-size:17px;margin:24px 6px 4px}
 @media (prefers-color-scheme:dark){.excard .hl{color:var(--pri)}}
 .warn{background:var(--ng-soft);border:2px solid var(--ng)}
 .verdict.mid{color:var(--star)}
+.prange{display:flex;align-items:center;gap:10px;margin-top:8px}.prange select{margin:0;flex:1}.prange span{font-weight:700}
+.krange{margin-top:12px;padding:10px 14px;border-radius:14px;background:var(--pri-soft);font-size:15px}
 a.btn{text-decoration:none}
 .whochip{margin-left:auto;margin-right:6px;padding:8px 12px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);font-weight:700;font-size:14px}
 .top h1+.whochip{margin-left:auto}
@@ -235,7 +238,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.5.3";
+const APP_VER = "1.6.1";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -707,6 +710,14 @@ let session=null, test=null, testTimer=null;
 let SUBJ = "";
 function go(h){ if(location.hash!==h) location.hash=h; else route(); }
 window.addEventListener("hashchange", ()=>{
+  if(K && !K.done && location.hash!=="#ktest"){
+    if(!confirm("テストを途中でやめますか？（ここまでの答えは採点されません）")){ location.hash="#ktest"; return; }
+    clearInterval(KTIMER); K=null; session=null;
+  }
+  if(K && K.done && !K.fin && location.hash!=="#kresult"){
+    if(!confirm("書きの○×がまだです。答え合わせをやめますか？（このテストは記録されません）")){ location.hash="#kresult"; return; }
+    K=null;
+  }
   if(test && !test.done && location.hash!=="#test"){
     if(!confirm("模擬テストを途中でやめますか？（ここまでの解答は採点されません）")){ location.hash="#test"; return; }
     clearInterval(testTimer); test=null;
@@ -719,6 +730,9 @@ function route(){
   document.body.classList.toggle("kid", isKid());
   if(h==="#who"){ applyTheme(null); return renderWho(); }
   if(h==="#mom"){ applyTheme(SUBJ||null); return renderMom(); }
+  if(h==="#ktest-setup" && SUBJ==="漢字"){ applyTheme("漢字"); return renderKTestSetup(); }
+  if(h==="#ktest" && K && !K.done){ applyTheme("漢字"); return renderKTest(); }
+  if(h==="#kresult" && K && K.done){ applyTheme("漢字"); return renderKResult(); }
   if(h==="#settings"){ applyTheme(null); return renderSettings(); }
   if(h==="#top" || !SUBJ){ applyTheme(null); return renderTop(); }
   applyTheme(SUBJ);
@@ -818,9 +832,9 @@ function renderHome(){
   app().innerHTML=`${topbar(`<span>${t.icon}</span>${esc(SUBJ)}`,"#top",true)}
     ${miss.length?`<div class="card warn">⚠️ <b>図・写真のデータが入っていません</b><br><span class="muted">「設定」→「ファイルから読み込む」で、${esc(miss.map(id=>SETS[id].unit).join("・"))}の問題ファイルを読み込み直してね。記録は消えません。</span></div>`:""}
     ${hero}
-    <div class="grid3">
+    <div class="grid3 ${SUBJ==="漢字"?"grid4":""}">
       <button class="tile" onclick="go('#units')"><span class="ic">📖</span><b>単元練習</b></button>
-      ${SUBJ==="漢字" ? `<button class="tile" onclick="go('#mom')"><span class="ic">👩</span><b>おうちの人<br>チェック${PENDING?`（${PENDING}）`:""}</b></button>`
+      ${SUBJ==="漢字" ? `<button class="tile" onclick="go('#ktest-setup')"><span class="ic">📝</span><b>50問テスト</b></button><button class="tile" onclick="go('#mom')"><span class="ic">👩</span><b>おうちの人チェック${PENDING?`（${PENDING}）`:""}</b></button>`
         : `<button class="tile" onclick="go('#test-setup')"><span class="ic">📝</span><b>模擬テスト</b></button>`}
       <button class="tile" onclick="go('#stats')"><span class="ic">📊</span><b>記録</b></button>
     </div>
@@ -1022,6 +1036,162 @@ function answerText(q){
   return "";
 }
 
+/* ---------- 漢字の50問テスト（前半：読み／後半：書き） ---------- */
+let K=null, KSEL=null, KTIMER=null;
+function renderKTestSetup(){
+  const secs=sections("漢字");
+  if(!secs.length){ app().innerHTML=topbar("📝 50問テスト","#home")+`<div class="card emptybox"><p>漢字の問題データがまだありません</p></div>`; return; }
+  const keys=new Set(secs.map(s=>s.key));
+  if(!KSEL || [...KSEL.keys].some(k=>!keys.has(k))) KSEL={keys:new Set(keys), n:50, min:0};
+  const pool=kPool(), P=pool.length, N=kCount(P), ny=Math.ceil(N/2), nk=N-ny;
+  const byUnit={}; secs.forEach(s=>{ (byUnit[s.unit] ||= []).push(s); });
+  const pages=kPageList(), sel=secs.filter(s=>KSEL.keys.has(s.key)).map(s=>secPages(s.sec)).filter(Boolean);
+  const pa=KSEL.pa ?? (sel.length?Math.min(...sel.map(r=>r[0])):pages[0]), pb=KSEL.pb ?? (sel.length?Math.max(...sel.map(r=>r[1])):pages[pages.length-1]);
+  const opt=v=>pages.map(p=>`<option value="${p}" ${p===v?"selected":""}>p.${p}</option>`).join("");
+  const past=DB.tests.filter(r=>r.subject==="漢字").slice(-5).reverse();
+  app().innerHTML=topbar("📝 50問テスト","#home")+`
+    <div class="card"><b>範囲（ページで選ぶ）</b>
+      ${pages.length?`<div class="prange"><select id="kpa" class="field" onchange="kSetPages('a')">${opt(pa)}</select><span>〜</span><select id="kpb" class="field" onchange="kSetPages('b')">${opt(pb)}</select></div>`:""}
+      <p class="hint">テストのお知らせに書いてあるページを選んでね。下のチェックで細かく選ぶこともできます。</p>
+      ${Object.entries(byUnit).map(([u,ss])=>`<div class="unitbar"><b>${esc(u)}</b>
+          <button onclick="kUnit('${encodeURIComponent(u)}',true)">全部</button><button onclick="kUnit('${encodeURIComponent(u)}',false)">はずす</button></div>
+        ${ss.map(s=>`<label class="check"><input type="checkbox" ${KSEL.keys.has(s.key)?"checked":""} onchange="KSEL.keys[this.checked?'add':'delete'](decodeURIComponent('${encodeURIComponent(s.key)}'));KSEL.pa=KSEL.pb=undefined;renderKTestSetup()">
+          <span>${esc(s.sec)}<span class="muted">（${s.qs.length}語）</span></span></label>`).join("")}`).join("")}</div>
+    <div class="card"><b>問題数</b><div class="seg">${[20,30,50,0].map(n=>`<button class="${KSEL.n===n?"on":""}" onclick="KSEL.n=${n};renderKTestSetup()">${n?n+"問":"言葉の数だけ"}</button>`).join("")}</div>
+      <div class="spacer"></div><b>時間</b><div class="seg">${[0,30,45].map(m=>`<button class="${KSEL.min===m?"on":""}" onclick="KSEL.min=${m};renderKTestSetup()">${m?m+"分":"なし"}</button>`).join("")}</div>
+      <div class="krange">${P?`えらんだ範囲：<b>${P}語</b> → <b>${N}問</b>（読み${ny}・書き${nk}）`:"範囲がえらばれていません"}
+        ${P&&N>P?`<br><span class="muted">言葉が${KSEL.n}語より少ないので、${N-P}語は「読み」と「書き」の両方で出ます（例文はかえます）。</span>`:""}
+        ${P&&KSEL.n&&KSEL.n>P*2?`<br><span class="muted">この範囲では、最大${P*2}問です。</span>`:""}</div>
+      <p class="hint">前半は「読み」（ひらがなで入力）、後半は「書き」（マスに手で書く）。終わるまで答えは見られません。毎回ちがう問題がえらばれ、ドリルでまちがえた言葉や苦手な言葉が出やすくなります。</p></div>
+    <button class="btn" ${N?"":"disabled"} onclick="startKTest()">テスト開始（${N}問）</button>
+    ${past.length?`<h2>これまでの点数</h2><div class="card"><table>${past.map(r=>`<tr><td>${r.date.slice(5).replace("-","/")}</td><td class="muted">${r.n}問</td><td class="r"><b>${r.score}点</b></td></tr>`).join("")}</table></div>`:""}`;
+}
+function kUnit(enc,on){ const u=decodeURIComponent(enc); sections("漢字").filter(s=>s.unit===u).forEach(s=>KSEL.keys[on?"add":"delete"](s.key)); KSEL.pa=KSEL.pb=undefined; renderKTestSetup(); }
+function kPool(){ return allQ("漢字").filter(q=>KSEL.keys.has(q.secKey)); }
+function kCount(P){ return KSEL.n ? Math.min(KSEL.n, P*2) : P; }   // 最大で「ことばの数×2」（読み＋書き）
+/* ページ番号での範囲指定（単元名の「p.5〜8」から読み取る） */
+function secPages(sec){ const m=String(sec).match(/p\.(\d+)(?:〜(\d+))?/); return m?[+m[1], +(m[2]||m[1])]:null; }
+function kPageList(){ const ps=new Set(); sections("漢字").forEach(s=>{ const r=secPages(s.sec); if(r){ ps.add(r[0]); ps.add(r[1]); } }); return [...ps].sort((a,b)=>a-b); }
+function kSetPages(which){
+  let a=+$("#kpa").value, b=+$("#kpb").value;
+  if(a>b){ if(which==="a") b=a; else a=b; }   // 入れかわらないように、動かしていない方を合わせる
+  const lo=a, hi=b;
+  KSEL.keys=new Set(sections("漢字").filter(s=>{ const r=secPages(s.sec); return r && r[1]>=lo && r[0]<=hi; }).map(s=>s.key));
+  KSEL.pa=lo; KSEL.pb=hi; renderKTestSetup();
+}
+function kWeight(q){ const p=prog(q.id); let w=1; if(q.miss) w+=2; if(!p) w+=.5; else if(p.box<=1) w+=2; else if(p.box>=4) w-=.5; return Math.max(.3,w); }
+function kPick(arr,k){ return arr.map(q=>({q,key:Math.random()**(1/kWeight(q))})).sort((a,b)=>b.key-a.key).slice(0,k).map(x=>x.q); }
+function startKTest(list){
+  let items;
+  if(list){ items=list.map(x=>Object.assign({},x)); }   // まちがえた問題だけ もう一度
+  else{
+    const pool=kPool(), P=pool.length, N=kCount(P), ny=Math.ceil(N/2);
+    if(N<=P){   // 範囲のことばが足りる：同じことばは1回だけ
+      const chosen=shuffle(kPick(pool,N));
+      items=chosen.map((q,i)=>Object.assign({},q,{kmode:i<ny?"yomi":"kaki"}));
+    }else{      // 足りない：全部のことばを出し、一部は読みと書きの両方で（例文は変える）
+      const both=kPick(pool,N-P), rest=shuffle(pool.filter(q=>!both.includes(q))), ry=ny-both.length;
+      items=[];
+      both.forEach(q=>{ const ss=shuffle([q.s].concat(q.alt||[]));
+        items.push(Object.assign({},q,{kmode:"yomi", s:ss[0], fixS:true}), Object.assign({},q,{kmode:"kaki", s:ss[1]||ss[0], fixS:true})); });
+      rest.forEach((q,i)=>items.push(Object.assign({},q,{kmode:i<ry?"yomi":"kaki"})));
+    }
+    items=shuffle(items).sort((a,b)=>(a.kmode==="yomi"?0:1)-(b.kmode==="yomi"?0:1));
+  }
+  items=items.map(q=>q.fixS?q:Object.assign(q,{s:q.alt&&q.alt.length?pick([q.s].concat(q.alt)):q.s}));
+  K={list:items, ans:items.map(()=>""), st:items.map(()=>({strokes:[]})), uns:items.map(()=>false), i:0, start:Date.now(), limit:(list?0:KSEL.min)*60000, done:false, fin:false};
+  clearInterval(KTIMER); if(K.limit) KTIMER=setInterval(kTick,1000);
+  go("#ktest");
+}
+function kTick(){ if(!K||K.done){ clearInterval(KTIMER); return; } const left=K.limit-(Date.now()-K.start), el=$("#tm");
+  if(left<=0){ toast("時間です！"); submitKTest(true); return; } if(el){ el.textContent=fmt(left); el.classList.toggle("low",left<60000); } }
+function renderKTest(){
+  const q=K.list[K.i], N=K.list.length, ny=K.list.filter(x=>x.kmode==="yomi").length;
+  session={state:K.st[K.i], list:[q], i:0, ktest:true};   // 手書きパッドが使う
+  const answered=k=>K.list[k].kmode==="yomi" ? !!K.ans[k].trim() : K.st[k].strokes.length>0;
+  app().innerHTML=`<div class="top"><button class="back" onclick="go('#home')" aria-label="やめる">✕</button>
+      <h1 style="font-size:16px">${q.kmode==="yomi"?"読み":"書き"}　${K.i+1}/${N}</h1>${K.limit?`<span class="timer" id="tm">${fmt(K.limit-(Date.now()-K.start))}</span>`:""}</div>
+    <div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill kind">${q.kmode==="yomi"?"👀 読み":"✍️ 書き"}</span></div>
+      <div class="q" style="margin-bottom:0">問${K.i+1}</div>${kanjiBlock(q)}
+      <div class="muted">${q.kmode==="yomi"?"――の ことばの 読みかたを ひらがなで 書こう":"□の ことばを 漢字で 書こう"}</div>
+      ${q.kmode==="yomi"?`<input class="field" id="kin" ${inputAttrs(false).replace("答えを入力","ひらがなで入力")} value="${esc(K.ans[K.i])}" oninput="K.ans[K.i]=this.value" enterkeyhint="next">`:padHTML([...q.w].length)}
+      <button class="btn ghost unsure ${K.uns[K.i]?"on":""}" onclick="K.uns[K.i]=!K.uns[K.i];renderKTest()">${K.uns[K.i]?"🤔 自信なし（明日もう1回）✓":"🤔 自信なし の印をつける"}</button></div>
+    <div class="row"><button class="btn sub" ${K.i?"":"disabled"} onclick="kMove(-1)">← 前へ</button>
+      ${K.i<N-1?`<button class="btn" onclick="kMove(1)">次へ →</button>`:`<button class="btn ok" onclick="submitKTest(false)">提出する</button>`}</div>
+    <div class="card"><div class="muted">問題一覧（1〜${ny}：読み　${ny+1}〜${N}：書き）</div>
+      <div class="qnav">${K.list.map((x,k)=>`<button class="${answered(k)?"done":""} ${k===K.i?"cur":""}" onclick="kJump(${k})">${k+1}</button>`).join("")}</div>
+      <div class="spacer"></div><button class="btn ghost" onclick="submitKTest(false)">提出する</button></div>`;
+  const inp=$("#kin"); if(inp){ inp.focus(); inp.addEventListener("keydown",e=>{ if(e.key==="Enter") kMove(1); }); }
+  if($("#pad")) padInit();
+}
+function kMove(d){ K.i=Math.max(0,Math.min(K.list.length-1,K.i+d)); renderKTest(); window.scrollTo(0,0); }
+function kJump(k){ K.i=k; renderKTest(); window.scrollTo(0,0); }
+/* 書いた線を画像にする（チェック用） */
+function strokesToImg(strokes, cells){
+  if(!strokes||!strokes.length) return null;
+  const cs=150, w=cs*cells, h=cs, c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d");
+  x.fillStyle="#fff"; x.fillRect(0,0,w,h); x.strokeStyle="#E6DCE3"; x.lineWidth=2;
+  for(let i=1;i<cells;i++){ x.beginPath(); x.moveTo(i*cs,0); x.lineTo(i*cs,h); x.stroke(); }
+  x.setLineDash([5,7]); for(let i=0;i<cells;i++){ x.beginPath(); x.moveTo(i*cs+cs/2,4); x.lineTo(i*cs+cs/2,h-4); x.moveTo(i*cs+4,h/2); x.lineTo(i*cs+cs-4,h/2); x.stroke(); } x.setLineDash([]);
+  x.strokeStyle="#2A2430"; x.lineWidth=Math.max(5,h/30); x.lineCap="round"; x.lineJoin="round";
+  for(const s of strokes){ x.beginPath(); s.forEach(([px,py],i)=>i?x.lineTo(px*w,py*h):x.moveTo(px*w,py*h)); if(s.length===1) x.lineTo(s[0][0]*w+.1,s[0][1]*h+.1); x.stroke(); }
+  return c.toDataURL("image/png");
+}
+function submitKTest(timeUp){
+  if(!timeUp){
+    const blank=K.list.filter((q,k)=>q.kmode==="yomi"?!K.ans[k].trim():!K.st[k].strokes.length).length;
+    if(!confirm(blank?`まだ書いていない問題が${blank}問あります。提出しますか？`:"提出しますか？")) return;
+  }
+  clearInterval(KTIMER); K.done=true; K.used=Date.now()-K.start; session=null;
+  K.res=K.list.map((q,k)=>{
+    if(q.kmode==="yomi") return {ok:termCheck({a:q.r, accept:[]}, K.ans[k]).ok?1:0};
+    const img=strokesToImg(K.st[k].strokes, [...q.w].length);
+    return img ? {ok:null, img} : {ok:0, img:null};   // 書きは自分で○×をつける
+  });
+  go("#kresult");
+}
+function kScore(){ return Math.round(K.res.reduce((s,r)=>s+(r.ok||0),0)/K.list.length*100); }
+function kMark(k,v){ if(K.fin) return; K.res[k].ok=v; renderKResult(true); }
+function renderKResult(keep){
+  const y=window.scrollY, N=K.list.length, pend=K.res.filter(r=>r.ok===null).length, sc=kScore();
+  const wrong=K.list.filter((q,k)=>K.res[k].ok!==1||K.uns[k]);
+  const yOk=K.list.filter((q,k)=>q.kmode==="yomi"&&K.res[k].ok===1).length, yN=K.list.filter(q=>q.kmode==="yomi").length;
+  const kOk=K.list.filter((q,k)=>q.kmode==="kaki"&&K.res[k].ok===1).length, kN=N-yN;
+  app().innerHTML=`${topbar("📝 テストの結果")}
+    <div class="card done-head">${doriSVG(sc>=80?"cheer":"happy",96)}<div class="muted">得点（100点満点）</div>
+      <div class="score">${sc}<span style="font-size:22px">点</span></div>
+      <div class="muted">読み ${yOk}/${yN}　書き ${kOk}${pend?"＋？":""}/${kN}　${Math.round(K.used/60000)}分</div>
+      ${pend?`<p style="margin:10px 0 0"><b>✍️ 書きの答え合わせが あと${pend}問。自分の字を見て ⭕／❌ をつけてね</b></p>`:""}</div>
+    ${K.fin?`<div class="card"><b>おつかれさま！</b><div class="muted">まちがえた問題・自信なしの問題は、明日の「今日の漢字」に出てきます。書いた字は「おうちの人チェック」に送ったよ。</div>
+      <div class="spacer"></div>${wrong.length?`<button class="btn" onclick="kRetry()">まちがえた問題だけ もう一度（${wrong.length}問）</button><div class="spacer"></div>`:""}
+      <button class="btn sub" onclick="K=null;go('#ktest-setup')">ちがう問題で もう一度</button><div class="spacer"></div>
+      <div class="row"><button class="btn ghost" onclick="K=null;go('#mom')">👩 チェック</button><button class="btn ghost" onclick="K=null;go('#home')">ホームへ</button></div></div>`:""}
+    <h2>答え合わせ</h2>
+    ${K.list.map((q,k)=>{ const r=K.res[k], mark=r.ok===1?"⭕":r.ok===0?"❌":"✍️", col=r.ok===1?"var(--ok)":r.ok===0?"var(--ng)":"var(--star)";
+      return `<div class="card"><div style="display:flex;gap:8px;align-items:center"><b style="font-size:20px;color:${col}">${mark}</b>
+          <span class="muted">問${k+1}　${q.kmode==="yomi"?"読み":"書き"}</span>${K.uns[k]?`<span class="pill star">🤔 自信なし</span>`:""}${q.miss?`<span class="pill star">📌</span>`:""}</div>
+        <div style="font-weight:700;margin:6px 0">${esc((q.s||q.w).replace(/[［］]/g,""))}</div>
+        ${q.kmode==="yomi"
+          ? `<div class="muted">あなたの答え：${esc(K.ans[k]||"（空欄）")}</div><div style="color:var(--pri-deep);font-weight:700">正解：${esc(q.w)}（${esc(q.r)}）</div>`
+          : `<div class="momgrid"><div><div class="muted">書いた字</div>${r.img?`<img src="${r.img}" class="momimg" alt="">`:`<p class="muted">（書いていない）</p>`}</div>
+              <div><div class="muted">正しい字</div><div class="kbig">${esc(q.w)}</div><div class="muted">${esc(q.r)}</div></div></div>
+            ${r.img&&!K.fin?`<div class="row"><button class="btn ${r.ok===0?"ng":"ghost"}" onclick="kMark(${k},0)">❌ まちがえた</button><button class="btn ${r.ok===1?"ok":"ghost"}" onclick="kMark(${k},1)">⭕ 書けた</button></div>`:""}
+            ${strokeBtn(q)}`}
+        ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}</div>`; }).join("")}
+    ${K.fin?"":`<button class="btn" ${pend?"disabled":""} onclick="finishKTest()">${pend?`あと${pend}問 ○×をつけてね`:"完了 ▶"}</button>`}`;
+  if(keep) window.scrollTo(0,y);
+}
+async function finishKTest(){
+  if(K.fin) return; K.fin=true;
+  K.list.forEach((q,k)=>{ const ok=K.res[k].ok===1; grade(Object.assign({},q,{fmt:q.kmode}), ok, false, {unsure:K.uns[k], fmt:q.kmode}); });
+  for(let k=0;k<K.list.length;k++){ const q=K.list[k], r=K.res[k]; if(q.kmode!=="kaki"||!r.img) continue;
+    await chkAdd({prof:PROF.cur, date:today(), ts:Date.now()+k, qid:q.id, setId:q.setId, w:q.w, r:q.r, s:q.s||"", img:r.img, self:K.uns[k]?"unsure":(r.ok===1?"ok":"ng"), mom:null, test:true}); }
+  const bySec={}; K.list.forEach((q,k)=>{ const s=bySec[q.secKey]||(bySec[q.secKey]=[0,0]); s[0]+=K.res[k].ok||0; s[1]++; });
+  DB.tests.push({date:today(), subject:"漢字", n:K.list.length, score:kScore(), mins:Math.round(K.used/60000), bySec, units:"漢字テスト"});
+  save(); await refreshPending(); renderKResult(); window.scrollTo(0,0); sparkle();
+}
+function kRetry(){ const wrong=K.list.filter((q,k)=>K.res[k].ok!==1||K.uns[k]); K=null; startKTest(wrong); }
+
 /* ---------- おうちの人チェック ---------- */
 let MOMLIST=[], MOMSHOW="todo";
 async function renderMom(){
@@ -1035,7 +1205,7 @@ async function renderMom(){
       ${MOMLIST.length?`<div class="spacer"></div><div class="row"><button class="btn sub" id="momsend" onclick="momShare()">📤 チェック表を送る</button>${MOMSHOW==="todo"?`<button class="btn ok" onclick="momAllOk()">ぜんぶ ⭕</button>`:""}</div>`:""}
       ${MOMLIST.length?`<p class="hint">押すと共有メニューが開きます。Gmailなどを選んで、宛先を入れて送ってください。<a href="#" onclick="momSendSheet('');return false">ほかの送り方</a></p>`:""}</div>
     ${MOMLIST.length?MOMLIST.map((r,i)=>`<div class="card momrow">
-      <div class="muted">${esc(r.date.slice(5).replace("-","/"))}　${esc((r.s||r.w).replace(/[［］]/g,""))}</div>
+      <div class="muted">${esc(r.date.slice(5).replace("-","/"))}${r.test?"　📝テスト":""}　${esc((r.s||r.w).replace(/[［］]/g,""))}</div>
       <div class="momgrid"><div><div class="muted">書いた字</div><img src="${r.img}" class="momimg" alt=""></div>
         <div><div class="muted">正しい字</div><div class="kbig">${esc(r.w)}</div><div class="muted">${esc(r.r)}</div></div></div>
       <div class="muted">本人：${selfLbl[r.self]||r.self}${r.mom?`　／　おうちの人：${r.mom==="ok"?"⭕":"❌"}`:""}</div>
