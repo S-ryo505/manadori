@@ -133,6 +133,7 @@ h2{font-size:17px;margin:24px 6px 4px}
 .qnav button{height:42px;border-radius:12px;border:2.5px solid var(--line);background:var(--card);font-weight:700}
 .qnav button.done{background:var(--pri-soft);border-color:var(--pri);color:var(--pri-deep)}
 .qnav button.cur{outline:3px solid var(--star)}
+.qnav button.kk{box-shadow:inset 0 -4px 0 #F0A04B}
 .qimg{display:block;width:100%;max-height:46vh;object-fit:contain;border-radius:16px;background:#fff;margin:10px 0 2px;border:2px solid var(--line);cursor:zoom-in}
 .qimg-note{font-size:12px;color:var(--sub);text-align:right}
 .zoom{position:fixed;inset:0;background:rgba(20,12,24,.94);z-index:40;display:flex;flex-direction:column}
@@ -287,7 +288,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.7.2";
+const APP_VER = "1.7.3";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -418,7 +419,7 @@ function grade(q, ok, soft, ex){
   const t=today(), p=DB.prog[q.id]||{box:0,n:0,c:0,hist:""};
   const good=ok&&!unsure;
   p.n++; if(good) p.c++;
-  p.fmt=p.fmt||{}; if(fmt){ p.fmt[fmt]=(good&&!soft)?1:0; p.lastFmt=fmt; }
+  p.fmt=p.fmt||{}; if(fmt){ p.fmt[fmt]=(good&&!soft)?1:0; p.lastFmt=fmt; if(q.type==="kanji"||q.kmode) p.sides=((p.sides||"")+(fmt==="kaki"?"k":"y")).slice(-3); }
   if(unsure || !ok) p.box=1;
   else if(soft) p.box=Math.max(1,p.box);
   else { p.box=Math.min(p.box+1,5); if(!masteryOk(q,p.fmt)) p.box=Math.min(p.box,2); }   // 書いて（漢字は読みと書きの両方で）正解するまでは「定着」にしない
@@ -523,12 +524,16 @@ function formatsOf(q){
 }
 function chooseFmt(q, fmts){
   if(fmts.length===1) return fmts[0];
-  if(q.type==="kanji"){   // 読み → 書き → 読み … と交互。読みは「選ぶ」から「入力」へ
-    const p=prog(q.id); if(!p) return "yomipick";
-    const F=p.fmt||{};
-    if(p.lastFmt!=="kaki") return "kaki";
-    if(F.yomipick!==1) return "yomipick";
-    if(F.yomi!==1) return "yomi";
+  if(q.type==="kanji"){   // 読みと書きを ごちゃまぜ。まだ正解していない方を出やすく、前回と同じ方は出にくく
+    const p=prog(q.id), F=(p&&p.fmt)||{};
+    const yomiOk=F.yomi===1||F.yomipick===1, kakiOk=F.kaki===1;
+    let wk=1, wy=1;
+    if(!kakiOk) wk*=1.6; if(!yomiOk) wy*=1.6;
+    const sd=(p&&p.sides)||(p&&p.lastFmt?(p.lastFmt==="kaki"?"k":"y"):"");
+    if(sd.endsWith("kk")) wk*=.15; else if(sd.endsWith("k")) wk*=.5;     // 同じ側が2回続いたら、3回目はかなり出にくく
+    if(sd.endsWith("yy")) wy*=.15; else if(sd.endsWith("y")) wy*=.5;
+    if(Math.random()*(wk+wy)<wk) return "kaki";
+    if(!yomiOk) return Math.random()<.6?"yomipick":"yomi";      // 読みは「選ぶ」と「入力」もまぜる
     return Math.random()<.5?"yomi":"yomipick";
   }
   const recog=fmts.filter(f=>f!=="write"), p=prog(q.id);
@@ -1097,7 +1102,7 @@ function renderKTestSetup(){
   const secs=sections("漢字");
   if(!secs.length){ app().innerHTML=topbar("📝 50問テスト","#home")+`<div class="card emptybox"><p>漢字の問題データがまだありません</p></div>`; return; }
   const keys=new Set(secs.map(s=>s.key));
-  if(!KSEL || [...KSEL.keys].some(k=>!keys.has(k))) KSEL={keys:new Set(keys), n:50, min:0};
+  if(!KSEL || [...KSEL.keys].some(k=>!keys.has(k))) KSEL={keys:new Set(keys), n:50, min:0, order:"mix"};
   const pool=kPool(), P=pool.length, N=kCount(P), ny=Math.ceil(N/2), nk=N-ny;
   const byUnit={}; secs.forEach(s=>{ (byUnit[s.unit] ||= []).push(s); });
   const pages=kPageList(), sel=secs.filter(s=>KSEL.keys.has(s.key)).map(s=>secPages(s.sec)).filter(Boolean);
@@ -1113,11 +1118,12 @@ function renderKTestSetup(){
         ${ss.map(s=>`<label class="check"><input type="checkbox" ${KSEL.keys.has(s.key)?"checked":""} onchange="KSEL.keys[this.checked?'add':'delete'](decodeURIComponent('${encodeURIComponent(s.key)}'));KSEL.pa=KSEL.pb=undefined;renderKTestSetup()">
           <span>${esc(s.sec)}<span class="muted">（${s.qs.length}語）</span></span></label>`).join("")}`).join("")}</div>
     <div class="card"><b>問題数</b><div class="seg">${[20,30,50,0].map(n=>`<button class="${KSEL.n===n?"on":""}" onclick="KSEL.n=${n};renderKTestSetup()">${n?n+"問":"言葉の数だけ"}</button>`).join("")}</div>
+      <div class="spacer"></div><b>順番</b><div class="seg">${[["mix","ごちゃまぜ"],["honban","読み→書き"]].map(([k,t])=>`<button class="${(KSEL.order||"mix")===k?"on":""}" onclick="KSEL.order='${k}';renderKTestSetup()">${t}</button>`).join("")}</div>
       <div class="spacer"></div><b>時間</b><div class="seg">${[0,30,45].map(m=>`<button class="${KSEL.min===m?"on":""}" onclick="KSEL.min=${m};renderKTestSetup()">${m?m+"分":"なし"}</button>`).join("")}</div>
       <div class="krange">${P?`えらんだ範囲：<b>${P}語</b> → <b>${N}問</b>（読み${ny}・書き${nk}）`:"範囲がえらばれていません"}
         ${P&&N>P?`<br><span class="muted">言葉が${KSEL.n}語より少ないので、${N-P}語は「読み」と「書き」の両方で出ます（例文はかえます）。</span>`:""}
         ${P&&KSEL.n&&KSEL.n>P*2?`<br><span class="muted">この範囲では、最大${P*2}問です。</span>`:""}</div>
-      <p class="hint">前半は「読み」（ひらがなで入力）、後半は「書き」（マスに手で書く）。終わるまで答えは見られません。毎回ちがう問題がえらばれ、ドリルでまちがえた言葉や苦手な言葉が出やすくなります。</p></div>
+      <p class="hint">${(KSEL.order||"mix")==="mix"?"「読み」（ひらがなで入力）と「書き」（マスに手で書く）がまざって出ます。":"前半は「読み」（ひらがなで入力）、後半は「書き」（マスに手で書く）。学校のテストと同じ順番です。"}終わるまで答えは見られません。毎回ちがう問題がえらばれ、ドリルでまちがえた言葉や苦手な言葉が出やすくなります。</p></div>
     <button class="btn" ${N?"":"disabled"} onclick="startKTest()">テスト開始（${N}問）</button>
     ${past.length?`<h2>これまでの点数</h2><div class="card"><table>${past.map(r=>`<tr><td>${r.date.slice(5).replace("-","/")}</td><td class="muted">${r.n}問</td><td class="r"><b>${r.score}点</b></td></tr>`).join("")}</table></div>`:""}`;
 }
@@ -1151,7 +1157,12 @@ function startKTest(list){
         items.push(Object.assign({},q,{kmode:"yomi", s:ss[0], fixS:true}), Object.assign({},q,{kmode:"kaki", s:ss[1]||ss[0], fixS:true})); });
       rest.forEach((q,i)=>items.push(Object.assign({},q,{kmode:i<ry?"yomi":"kaki"})));
     }
-    items=shuffle(items).sort((a,b)=>(a.kmode==="yomi"?0:1)-(b.kmode==="yomi"?0:1));
+    if(KSEL.order==="honban") items=shuffle(items).sort((a,b)=>(a.kmode==="yomi"?0:1)-(b.kmode==="yomi"?0:1));
+    else{   // ごちゃまぜ。読みと書きの両方で出る言葉は、書きを前半・読みを後半にはなす（読みで漢字を先に見てしまわないように）
+      const pk=items.filter(q=>q.fixS&&q.kmode==="kaki"), py=items.filter(q=>q.fixS&&q.kmode==="yomi"), other=shuffle(items.filter(q=>!q.fixS));
+      const h1=Math.max(0, Math.ceil(items.length/2)-pk.length);
+      items=shuffle(pk.concat(other.slice(0,h1))).concat(shuffle(py.concat(other.slice(h1))));
+    }
   }
   items=items.map(q=>q.fixS?q:Object.assign(q,{s:q.alt&&q.alt.length?pick([q.s].concat(q.alt)):q.s}));
   K={list:items, ans:items.map(()=>""), st:items.map(()=>({strokes:[]})), uns:items.map(()=>false), i:0, start:Date.now(), limit:(list?0:KSEL.min)*60000, done:false, fin:false};
@@ -1173,8 +1184,8 @@ function renderKTest(){
       <button class="btn ghost unsure ${K.uns[K.i]?"on":""}" onclick="K.uns[K.i]=!K.uns[K.i];renderKTest()">${K.uns[K.i]?"🤔 自信なし（明日もう1回）✓":"🤔 自信なし の印をつける"}</button></div>
     <div class="row"><button class="btn sub" ${K.i?"":"disabled"} onclick="kMove(-1)">← 前へ</button>
       ${K.i<N-1?`<button class="btn" onclick="kMove(1)">次へ →</button>`:`<button class="btn ok" onclick="submitKTest(false)">提出する</button>`}</div>
-    <div class="card"><div class="muted">問題一覧（1〜${ny}：読み　${ny+1}〜${N}：書き）</div>
-      <div class="qnav">${K.list.map((x,k)=>`<button class="${answered(k)?"done":""} ${k===K.i?"cur":""}" onclick="kJump(${k})">${k+1}</button>`).join("")}</div>
+    <div class="card"><div class="muted">${K.list.every((x,k)=>(k<ny)===(x.kmode==="yomi"))?`問題一覧（1〜${ny}：読み　${ny+1}〜${N}：書き）`:`問題一覧（オレンジの線があるのが「書き」）`}</div>
+      <div class="qnav">${K.list.map((x,k)=>`<button class="${answered(k)?"done":""} ${k===K.i?"cur":""} ${x.kmode==="kaki"?"kk":""}" onclick="kJump(${k})">${k+1}</button>`).join("")}</div>
       <div class="spacer"></div><button class="btn ghost" onclick="submitKTest(false)">提出する</button></div>`;
   const inp=$("#kin"); if(inp){ inp.focus(); inp.addEventListener("keydown",e=>{ if(e.key==="Enter") kMove(1); }); }
   if($("#pad")) padInit();
@@ -1397,7 +1408,7 @@ function startPuzzle(){
   if(location.hash!=="#game") return;
   const g=gameData(), dbg=isDebug();
   // デバッグ中は毎回あたらしい枠（子どもの「続き」には さわらない）
-  let cur=!dbg && g.cur && g.cur.date===today() ? g.cur : null;
+  let cur=!dbg && g.cur && g.cur.puz ? g.cur : null;   // クリアするまで（ギブアップしてクリアでもOK）同じパズル。日をまたいでも同じ
   if(!cur){
     const puz=genPuzzle(dbg ? (g.cleared||[]).concat(GDBG_SEEN) : g.cleared);
     if(dbg) GDBG_SEEN.push(puz.sig);
@@ -1565,7 +1576,7 @@ function gCheck(){
     s.innerHTML=gemSVG(GEMS[i%4].c,18); ov.appendChild(s); }
 }
 function gQuit(){
-  if(GZ && !GZ.done && !GZ.debug && !confirm("やめますか？（時間はそのまま進みます。つぎにアプリを開いたとき、同じパズルの続きから出てきます）")) return;
+  if(GZ && !GZ.done && !GZ.debug && !confirm("やめますか？\nクリアするか ギブアップするまで、つぎも このパズルの続きが出ます。\n（時間は止まらずに進みます）")) return;
   if(GZ) clearInterval(GZ.tm); GZ=null; go(GRET||"#top");
 }
 /* デバッグモード：設定画面のバージョン表示を10回つづけてタップ */
