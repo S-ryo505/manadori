@@ -14,8 +14,10 @@
 <style>
 @font-face{font-family:"ZenMaru";src:url("zenmaru-Medium.woff2") format("woff2");font-weight:400 500;font-display:swap}
 @font-face{font-family:"ZenMaru";src:url("zenmaru-Bold.woff2") format("woff2");font-weight:600 900;font-display:swap}
+@font-face{font-family:"Klee One";src:url("klee-SemiBold.woff2") format("woff2");font-weight:400 900;font-display:swap}
 :root{
-  --bg:#FFF7F4; --dot:#FBE3EA; --card:#FFFFFF; --ink:#3A3140; --sub:#8A7F8F; --line:#F0E4EA;
+  --bg:#FFF7F4;
+  --kfont:"Klee One","UD Digi Kyokasho N-R","UD デジタル 教科書体 N-R","Noto Serif JP","Noto Serif CJK JP",serif; --dot:#FBE3EA; --card:#FFFFFF; --ink:#3A3140; --sub:#8A7F8F; --line:#F0E4EA;
   --pri:#9B7FE6; --pri-soft:#F1ECFD; --pri-deep:#7A5CD0; --pri-ink:#FFFFFF; --grad1:#B49CF2; --grad2:#F3A6C8;
   --ok:#2EAE7E; --ok-soft:#E2F6EC; --ng:#F0627E; --ng-soft:#FDE6EB;
   --star:#F2A93B; --star-soft:#FFF2DB;
@@ -168,6 +170,30 @@ h2{font-size:17px;margin:24px 6px 4px}
 @media (prefers-color-scheme:dark){.excard .hl{color:var(--pri)}}
 .warn{background:var(--ng-soft);border:2px solid var(--ng)}
 .verdict.mid{color:var(--star)}
+.whochip{margin-left:auto;margin-right:6px;padding:8px 12px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);font-weight:700;font-size:14px}
+.top h1+.whochip{margin-left:auto}
+.subjcard.who .sic{font-size:34px}
+.momcard{border-color:#FDE8F0}
+.ksent{font-size:24px;line-height:2;margin:14px 0 4px;font-weight:700;letter-spacing:.06em}
+.ksent .kw{font-family:var(--kfont);color:var(--pri-deep);border-bottom:4px solid var(--pri);padding:0 2px}
+.ksent .kbox{display:inline-block;border:3px solid var(--pri);border-radius:8px;padding:0 8px;margin:0 2px;background:var(--pri-soft);line-height:1.6}
+.kbig{font-family:var(--kfont);font-size:64px;line-height:1.2;color:var(--ink);font-weight:400}
+.kans{text-align:center}
+.kpad canvas{margin:0 auto;border-radius:6px;border-width:3px;border-color:var(--pri)}
+.zoom.strokes .zbox{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-content:flex-start;padding:16px}
+.kvg{background:#fff;border-radius:16px;padding:8px;width:min(80vw,300px)}
+.kvg svg{width:100%;height:auto;display:block}
+.kvg .kguide{stroke:#E6DCE3;stroke-width:.6;stroke-dasharray:2 2;fill:none}
+.kvg .kbase{stroke:#EFE7EC;stroke-width:4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.kvg .kstroke{stroke:#3A3140;stroke-width:4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.kvg .knum{font-size:7px;fill:#F27A3D;font-weight:700;transition:opacity .2s}
+.kcount{text-align:center;font-weight:700;color:#3A3140}
+.kcredit{width:100%;text-align:center;color:#ddd;font-size:12px}
+.momgrid{display:grid;grid-template-columns:1.4fr 1fr;gap:10px;align-items:center;margin:8px 0}
+.momimg{width:100%;border-radius:10px;border:2px solid var(--line);background:#fff}
+body.kid{font-size:17px}
+body.kid .q{font-size:21px}
+body.kid .choice{font-size:20px;min-height:62px}
 .passage{margin-top:12px;padding:12px 14px;border-radius:18px;background:var(--pri-soft)}
 .passage .ptext{font-size:17px;font-weight:700;line-height:1.6;margin-top:4px}
 .btn.unsure{margin-top:10px;min-height:46px;font-size:14px;border-style:dashed}
@@ -208,14 +234,24 @@ h2{font-size:17px;margin:24px 6px 4px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.4.1";
-const KEY = "manadori:v1";
+const APP_VER = "1.5.0";
+/* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
+const PKEY = "manadori:profiles";
+let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
+function loadProfiles(){ try{ const r=localStorage.getItem(PKEY); if(r){ const d=JSON.parse(r); PROF=Object.assign(PROF,d); } }catch(e){} }
+function saveProfiles(){ try{ localStorage.setItem(PKEY, JSON.stringify(PROF)); }catch(e){} }
+function curProf(){ return PROF.list.find(x=>x.id===PROF.cur)||PROF.list[0]; }
+function profKey(id){ return id==="chu" ? "manadori:v1" : "manadori:p:"+id; }
+function isKid(){ return curProf().level==="小学"; }
+function setLevel(s){ return s.level||"中学"; }
 const INTERVALS = [0, 1, 3, 7, 14, 30];
-const SUBJECTS = ["社会", "英語", "理科"];
+const SUBJECTS_BY_LEVEL = { 中学:["社会", "英語", "理科"], 小学:["漢字"] };
+const SUBJECTS = ["社会", "英語", "理科", "漢字"];
 const THEMES = {
   社会:{icon:"🌏", c:"#2FB38C", deep:"#1E8F6D", soft:"#E1F6EE", dsoft:"#1F3A33", g1:"#5ACFA6", g2:"#7CC3EC"},
   英語:{icon:"🔤", c:"#F0709F", deep:"#CF4D7E", soft:"#FDE8F0", dsoft:"#47283A", g1:"#F79BC0", g2:"#B9A0F2"},
   理科:{icon:"🧪", c:"#3E9BEA", deep:"#2A7CC6", soft:"#E3F0FD", dsoft:"#21344A", g1:"#6DB6F2", g2:"#86D9CB"},
+  漢字:{icon:"✍️", c:"#F27A3D", deep:"#D25A1E", soft:"#FFEBDD", dsoft:"#47301F", g1:"#F8A35E", g2:"#F6C55B"},
   数学:{icon:"📐", c:"#F29A38", deep:"#D27C1D", soft:"#FFF0DD", dsoft:"#47351F", g1:"#F7BA62", g2:"#F59AC0"},
   base:{icon:"✏️", c:"#9B7FE6", deep:"#7A5CD0", soft:"#F1ECFD", dsoft:"#352E48", g1:"#B49CF2", g2:"#F3A6C8"},
 };
@@ -224,14 +260,16 @@ const MIX_LABEL = {few:"少なめ", mid:"ふつう", many:"多め"};
 
 /* ---------- 学習記録（localStorage） ---------- */
 function defaults(){
+  const kid = (typeof PROF!=="undefined") && isKid();
   return { prog:{}, days:{}, tests:[], ui:{subj:""},
-    settings:{ examDate:"", newPerDay:15, sessionMax:30, answerMode:"type", requireWrite:true, mix:{社会:"many", 英語:"mid", 理科:"mid"} } };
+    settings:{ examDate:"", newPerDay: kid?10:15, sessionMax: kid?20:30, answerMode:"type", requireWrite:true, mix:{社会:"many", 英語:"mid", 理科:"mid"} } };
 }
 let DB = defaults();
 let LEGACY_SETS = null;
 function load(){
+  DB = defaults();
   try{
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(profKey(PROF.cur));
     if(raw){
       const d = JSON.parse(raw), def=defaults();
       if(d.sets && Object.keys(d.sets).length) LEGACY_SETS = d.sets;
@@ -244,12 +282,23 @@ function load(){
     }
   }catch(e){ console.warn(e); }
 }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){ toast("記録を保存できませんでした"); } }
+function save(){ try{ localStorage.setItem(profKey(PROF.cur), JSON.stringify(DB)); }catch(e){ toast("記録を保存できませんでした"); } }
 
 /* ---------- 問題データ（IndexedDB） ---------- */
 let SETS = {}, idb = null;
-function idbOpen(){ return new Promise(res=>{ try{ const r=indexedDB.open("manadori",1);
-  r.onupgradeneeded=()=>r.result.createObjectStore("sets"); r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); }catch(e){ res(null); } }); }
+function idbOpen(){ return new Promise(res=>{ try{ const r=indexedDB.open("manadori",2);
+  r.onupgradeneeded=()=>{ const db=r.result; if(!db.objectStoreNames.contains("sets")) db.createObjectStore("sets");
+    if(!db.objectStoreNames.contains("checks")) db.createObjectStore("checks",{keyPath:"k", autoIncrement:true}); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); r.onblocked=()=>res(null); }catch(e){ res(null); } }); }
+/* 手書きの答え（おうちの人チェック用） */
+function chkAdd(rec){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(null); const tx=idb.transaction("checks","readwrite"); const rq=tx.objectStore("checks").add(rec);
+  rq.onsuccess=()=>res(rq.result); tx.onerror=()=>res(null); }); }
+function chkPut(rec){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").put(rec); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
+function chkAll(){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res([]); const out=[], c=idb.transaction("checks","readonly").objectStore("checks").openCursor();
+  c.onsuccess=()=>{ const cur=c.result; if(cur){ out.push(cur.value); cur.continue(); } else res(out); }; c.onerror=()=>res(out); }); }
+function chkDel(k){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").delete(k); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
+let PENDING=0;
+async function refreshPending(){ const all=await chkAll(); PENDING=all.filter(r=>r.prof===PROF.cur && !r.mom).length; return PENDING; }
 function idbAll(){ return new Promise(res=>{ if(!idb) return res({}); const out={}, c=idb.transaction("sets","readonly").objectStore("sets").openCursor();
   c.onsuccess=()=>{ const cur=c.result; if(cur){ out[cur.key]=cur.value; cur.continue(); } else res(out); }; c.onerror=()=>res(out); }); }
 function idbPut(id,val){ return new Promise(res=>{ if(!idb) return res(false); const tx=idb.transaction("sets","readwrite"); tx.objectStore("sets").put(val,id);
@@ -293,12 +342,12 @@ function applyTheme(name){
 function allQ(subj){
   const out=[];
   for(const setId of Object.keys(SETS)){
-    const s=SETS[setId]; if(subj && s.subject!==subj) continue;
+    const s=SETS[setId]; if(setLevel(s)!==curProf().level) continue; if(subj && s.subject!==subj) continue;
     s.questions.forEach((q,i)=>out.push(Object.assign({}, q, {setId, subject:s.subject, unit:s.unit, ord:i, secKey:s.unit+"｜"+(q.sec||"")})));
   }
   return out;
 }
-function subjectsAll(){ const s=new Set(SUBJECTS); Object.values(SETS).forEach(x=>s.add(x.subject)); return [...s]; }
+function subjectsAll(){ const lv=curProf().level, s=new Set(SUBJECTS_BY_LEVEL[lv]||[]); Object.values(SETS).forEach(x=>{ if(setLevel(x)===lv) s.add(x.subject); }); return [...s]; }
 function missingImg(setId){ const s=SETS[setId]; return !!s && s.questions.some(q=>q.img && !(s.images&&s.images[q.img])); }
 function imgOf(q){ const s=SETS[q.setId]; return q.img && s && s.images ? s.images[q.img] : null; }
 function prog(id){ return DB.prog[id]; }
@@ -307,6 +356,10 @@ function dayRec(){ const t=today(); const d=DB.days[t]||(DB.days[t]={n:0,c:0}); 
 
 /* 採点 → 次の出題日。ex.unsure＝わからない／自信なし（明日もう1回）、ex.fmt＝出題形式 */
 function needsWrite(q){ return DB.settings.requireWrite!==false && (q.fmts||formatsOf(q)).includes("write"); }
+function masteryOk(q,F){
+  if(q.type==="kanji" || (q.fmts||[]).includes("kaki")) return F.kaki===1 && (F.yomi===1 || F.yomipick===1);
+  return !(needsWrite(q) && F.write!==1);
+}
 function grade(q, ok, soft, ex){
   ex=ex||{}; const unsure=!!ex.unsure, fmt=ex.fmt||q.fmt;
   const t=today(), p=DB.prog[q.id]||{box:0,n:0,c:0,hist:""};
@@ -315,7 +368,7 @@ function grade(q, ok, soft, ex){
   p.fmt=p.fmt||{}; if(fmt){ p.fmt[fmt]=(good&&!soft)?1:0; p.lastFmt=fmt; }
   if(unsure || !ok) p.box=1;
   else if(soft) p.box=Math.max(1,p.box);
-  else { p.box=Math.min(p.box+1,5); if(needsWrite(q) && p.fmt.write!==1) p.box=Math.min(p.box,2); }   // 書いて正解するまでは「定着」にしない
+  else { p.box=Math.min(p.box+1,5); if(!masteryOk(q,p.fmt)) p.box=Math.min(p.box,2); }   // 書いて（漢字は読みと書きの両方で）正解するまでは「定着」にしない
   let due=addDays(t, (unsure||(ok&&soft)) ? 1 : INTERVALS[p.box]);
   const e=DB.settings.examDate;
   if(e && e>t){ const lim=addDays(e,-1); if(due>lim) due = lim>addDays(t,1)?lim:addDays(t,1); }
@@ -409,6 +462,7 @@ function canWriteChoice(q){
 }
 function formatsOf(q){
   if(q.fmts) return q.fmts;
+  if(q.type==="kanji") return ["yomipick","yomi","kaki"];
   if(q.type==="term") return q.vocab ? ["pick","read","write"] : ["pick","write"];
   if(q.type==="choice") return canWriteChoice(q) ? ["choice","write"] : ["choice"];
   if(q.type==="order") return q.inline ? ["order","write"] : ["order"];
@@ -416,6 +470,14 @@ function formatsOf(q){
 }
 function chooseFmt(q, fmts){
   if(fmts.length===1) return fmts[0];
+  if(q.type==="kanji"){   // 読み → 書き → 読み … と交互。読みは「選ぶ」から「入力」へ
+    const p=prog(q.id); if(!p) return "yomipick";
+    const F=p.fmt||{};
+    if(p.lastFmt!=="kaki") return "kaki";
+    if(F.yomipick!==1) return "yomipick";
+    if(F.yomi!==1) return "yomi";
+    return Math.random()<.5?"yomi":"yomipick";
+  }
   const recog=fmts.filter(f=>f!=="write"), p=prog(q.id);
   if(!p) return pick(recog);                                   // 初めての問題は「選ぶ」から
   const F=p.fmt||{}, notOk=fmts.filter(f=>F[f]!==1);
@@ -431,6 +493,13 @@ function chooseFmt(q, fmts){
 }
 function buildFmt(q, f){
   const base={fmt:f, fmts:formatsOf(q)};
+  if(q.type==="kanji"){
+    if(f==="yomipick"){ const pool=SETS[q.setId].questions.filter(x=>x.type==="kanji").map(x=>({s:x.r, sec:x.sec, t:1}));
+      const wrong=makeDistractors({a:q.r, sec:q.sec, accept:[]}, pool) || kanaDistract(q.r);
+      return wrong ? Object.assign({},q,base,{type:"choice", kmode:"yomi", q:"――の ことばの 読みかたは？", a:q.r, wrong}) : null; }
+    if(f==="yomi") return Object.assign({},q,base,{type:"term", kmode:"yomi", mode:"write", q:"――の ことばの 読みかたを ひらがなで 書こう", a:q.r, accept:[]});
+    return Object.assign({},q,base,{type:"term", kmode:"kaki", mode:"write", q:"□の ことばを 漢字で 書こう", a:q.w, accept:[]});
+  }
   if(q.type==="term"){
     if(f==="write") return Object.assign({},q,base,{mode:"write"});
     if(f==="read"){ const wrong=makeDistractors({a:q.vocab.ja, sec:q.sec}, vocabPool(q.setId,"ja"));
@@ -443,6 +512,12 @@ function buildFmt(q, f){
   if(q.type==="order" && f==="write")
     return Object.assign({},q,base,{type:"term", mode:"write", q:q.q+"\nこの文を英語で書こう。", a:q.items.join(" "), accept:[], say:q.say||q.items.join(" ")});
   return Object.assign({},q,base);
+}
+function kanaDistract(r){   // 読みの選択肢が足りないときの予備（にている読み）
+  const sw=[["う","っ"],["や","ゃ"],["ゆ","ゅ"],["よ","ょ"],["か","が"],["た","だ"],["は","ば"],["こ","ご"],["し","じ"],["つ","づ"],["う",""],["い",""]];
+  const out=new Set();
+  for(const [a,b] of shuffle(sw)){ if(r.includes(a)){ const x=r.replace(a,b); if(x && x!==r) out.add(x); } if(b && r.includes(b)){ const x=r.replace(b,a); if(x!==r) out.add(x); } if(out.size>=3) break; }
+  const arr=[...out].slice(0,3); return arr.length===3?arr:null;
 }
 function variant(q){
   if(q.type==="calc"){ const g=GENS[q.gen]; return g ? Object.assign({},q,{calc:g(), fmt:"calc", fmts:["calc"]}) : Object.assign({},q,{type:"term",q:"（計算テンプレートなし）",a:"-"}); }
@@ -520,6 +595,35 @@ function exCard(q){
     <div class="exen ans-en">${html}</div><div class="exja">${esc(v.exJa||"")}</div>${sayBtns(v.ex).replace("🔊 発音を聞く","🔊 例文を聞く")}</div>`;
 }
 
+/* ---------- 漢字：例文の表示 ---------- */
+function kanjiBlock(q){
+  const s=q.s||("［"+q.w+"］");
+  const [pre, rest]=s.split("［"), [mid, post]=(rest||"").split("］");
+  const target = q.kmode==="kaki" ? `<span class="kbox">${esc(q.r)}</span>` : `<span class="kw">${esc(mid||q.w)}</span>`;
+  return `<div class="ksent">${esc(pre)}${target}${esc(post||"")}</div>`;
+}
+function strokesOf(ch, setId){ const s=SETS[setId]; return s&&s.strokes&&s.strokes[ch] || null; }
+function strokeBtn(q){ return (q.kanji||[]).some(c=>strokesOf(c,q.setId)) ? `<button class="speak" onclick="showStrokes('${esc(q.setId)}','${esc((q.kanji||[]).join(""))}')">🖌️ 書き順を見る</button>` : ""; }
+function showStrokes(setId, chars){
+  const z=document.createElement("div"); z.className="zoom strokes";
+  const svgs=[...chars].map(ch=>{ const d=strokesOf(ch,setId); if(!d) return "";
+    return `<div class="kvg"><svg viewBox="0 0 109 109"><path d="M54.5 0V109M0 54.5H109" class="kguide"/>
+      ${d.p.map(pp=>`<path d="${pp}" class="kbase"/>`).join("")}${d.p.map((pp,i)=>`<path d="${pp}" class="kstroke" data-i="${i}"/>`).join("")}
+      ${d.n.map(([x,y],i)=>`<text x="${x}" y="${y}" class="knum" data-i="${i}">${i+1}</text>`).join("")}</svg><div class="kcount">${esc(ch)}：${d.p.length}画</div></div>`; }).join("");
+  z.innerHTML=`<div class="zbar"><button id="zr">↻ もう一度</button><button id="zc">✕ 閉じる</button></div>
+    <div class="zbox kvgs">${svgs}<p class="kcredit">書き順データ：KanjiVG（CC BY-SA 3.0）</p></div>`;
+  document.body.appendChild(z);
+  const run=()=>{ const all=[...z.querySelectorAll(".kstroke")]; z.querySelectorAll(".knum").forEach(t=>t.style.opacity=0);
+    let t=0; all.forEach(el=>{ const L=el.getTotalLength(); el.style.transition="none"; el.style.strokeDasharray=L; el.style.strokeDashoffset=L; });
+    z._timers=(z._timers||[]); z._timers.forEach(clearTimeout); z._timers=[];
+    const svgEls=[...z.querySelectorAll("svg")];
+    svgEls.forEach(svg=>{ [...svg.querySelectorAll(".kstroke")].forEach((el,i)=>{ const L=el.getTotalLength(), dur=Math.max(350,L*9);
+      z._timers.push(setTimeout(()=>{ el.style.transition=`stroke-dashoffset ${dur}ms linear`; el.style.strokeDashoffset=0;
+        const n=svg.querySelector(`.knum[data-i="${i}"]`); if(n) n.style.opacity=1; }, t)); t+=dur+180; }); t+=300; }); };
+  z.querySelector("#zc").onclick=()=>{ (z._timers||[]).forEach(clearTimeout); z.remove(); };
+  z.querySelector("#zr").onclick=run; setTimeout(run,100);
+}
+
 /* ---------- 読解問題の英文 ---------- */
 function passageBox(q){
   if(!q.passage) return "";
@@ -542,23 +646,33 @@ function zoomImg(src){
 
 /* ---------- 手書きパッド ---------- */
 let padCtx=null;
-function padHTML(){ return `<div class="pad"><canvas id="pad"></canvas>
+function padHTML(cells){ return `<div class="pad${cells?" kpad":""}"><canvas id="pad" ${cells?`data-cells="${cells}"`:""}></canvas>
   <div class="padbar"><button onclick="padUndo()">↩ 1画もどす</button><button onclick="padClear()">🗑 ぜんぶ消す</button></div></div>`; }
+const KFONT = '"Klee One","UD Digi Kyokasho N-R","UD デジタル 教科書体 N-R","Noto Serif JP","Noto Serif CJK JP",serif';
 function padInit(){
   const c=$("#pad"); if(!c) return; const st=session.state; st.strokes=st.strokes||[];
+  const cells=+(c.dataset.cells||0);
+  if(cells){ const W=c.parentElement.getBoundingClientRect().width, cs=Math.min(Math.floor(W/cells), 210); c.style.width=(cs*cells)+"px"; c.style.height=cs+"px"; }
   const dpr=window.devicePixelRatio||1, r=c.getBoundingClientRect();
   c.width=Math.round(r.width*dpr); c.height=Math.round(r.height*dpr);
-  const ctx=c.getContext("2d"); ctx.scale(dpr,dpr); padCtx={c,ctx,w:r.width,h:r.height}; padRedraw();
+  const ctx=c.getContext("2d"); ctx.scale(dpr,dpr); padCtx={c,ctx,w:r.width,h:r.height,cells}; padRedraw();
   let cur=null; const pt=e=>{ const b=c.getBoundingClientRect(); return [(e.clientX-b.left)/b.width,(e.clientY-b.top)/b.height]; };
   c.onpointerdown=e=>{ e.preventDefault(); c.setPointerCapture(e.pointerId); cur=[pt(e)]; st.strokes.push(cur); padRedraw(); };
   c.onpointermove=e=>{ if(!cur) return; e.preventDefault(); cur.push(pt(e)); padRedraw(); };
   c.onpointerup=c.onpointercancel=()=>{ cur=null; };
 }
 function padRedraw(){
-  if(!padCtx) return; const {ctx,w,h}=padCtx, cs=getComputedStyle(document.documentElement);
-  ctx.clearRect(0,0,w,h); ctx.strokeStyle=cs.getPropertyValue("--line").trim()||"#ddd"; ctx.lineWidth=1.5; ctx.setLineDash([5,7]);
-  ctx.beginPath(); ctx.moveTo(10,h/2); ctx.lineTo(w-10,h/2); ctx.stroke(); ctx.setLineDash([]);
-  ctx.strokeStyle=cs.getPropertyValue("--ink").trim()||"#222"; ctx.lineWidth=4.5; ctx.lineCap="round"; ctx.lineJoin="round";
+  if(!padCtx) return; const {ctx,w,h,cells}=padCtx, cs=getComputedStyle(document.documentElement);
+  ctx.clearRect(0,0,w,h); ctx.strokeStyle=cs.getPropertyValue("--line").trim()||"#ddd";
+  if(cells){   // 漢字ノートのマス目（十字の点線）
+    const cw=w/cells; ctx.lineWidth=2; ctx.setLineDash([]); for(let i=1;i<cells;i++){ ctx.beginPath(); ctx.moveTo(i*cw,0); ctx.lineTo(i*cw,h); ctx.stroke(); }
+    ctx.lineWidth=1.2; ctx.setLineDash([4,6]); for(let i=0;i<cells;i++){ ctx.beginPath(); ctx.moveTo(i*cw+cw/2,4); ctx.lineTo(i*cw+cw/2,h-4); ctx.moveTo(i*cw+4,h/2); ctx.lineTo(i*cw+cw-4,h/2); ctx.stroke(); }
+    ctx.setLineDash([]);
+    const st=session&&session.state, q=session&&curQ();
+    if(st && st.trace && q){ ctx.fillStyle="rgba(120,120,140,.22)"; ctx.font=`${Math.round(cw*.82)}px ${KFONT}`; ctx.textAlign="center"; ctx.textBaseline="middle";
+      [...q.w].forEach((ch,i)=>ctx.fillText(ch, i*cw+cw/2, h/2+cw*.03)); }
+  } else { ctx.lineWidth=1.5; ctx.setLineDash([5,7]); ctx.beginPath(); ctx.moveTo(10,h/2); ctx.lineTo(w-10,h/2); ctx.stroke(); ctx.setLineDash([]); }
+  ctx.strokeStyle=cs.getPropertyValue("--ink").trim()||"#222"; ctx.lineWidth=cells?Math.max(4.5,h/34):4.5; ctx.lineCap="round"; ctx.lineJoin="round";
   for(const s of (session.state.strokes||[])){ ctx.beginPath(); s.forEach(([x,y],i)=>i?ctx.lineTo(x*w,y*h):ctx.moveTo(x*w,y*h)); if(s.length===1) ctx.lineTo(s[0][0]*w+.1,s[0][1]*h+.1); ctx.stroke(); }
 }
 function padUndo(){ (session.state.strokes||[]).pop(); padRedraw(); }
@@ -600,6 +714,9 @@ window.addEventListener("hashchange", ()=>{
 function route(){
   window.scrollTo(0,0); stopAll();
   const h=location.hash||"#top";
+  document.body.classList.toggle("kid", isKid());
+  if(h==="#who"){ applyTheme(null); return renderWho(); }
+  if(h==="#mom"){ applyTheme(SUBJ||null); return renderMom(); }
   if(h==="#settings"){ applyTheme(null); return renderSettings(); }
   if(h==="#top" || !SUBJ){ applyTheme(null); return renderTop(); }
   applyTheme(SUBJ);
@@ -616,6 +733,21 @@ function openSubj(s){ SUBJ=s; DB.ui.subj=s; save(); tsel=null; go("#home"); }
 function topbar(title, backTo, gear){
   return `<div class="top">${backTo?`<button class="back" onclick="go('${backTo}')" aria-label="もどる">←</button>`:""}<h1>${title}</h1>
     ${gear?`<button class="icon" onclick="go('#settings')" aria-label="設定">⚙️</button>`:""}</div>`;
+}
+
+/* ---------- だれが べんきょうする？ ---------- */
+function renderWho(){
+  app().innerHTML=`<div class="top"><h1>まなドリ</h1><button class="icon" onclick="go('#settings')" aria-label="設定">⚙️</button></div>
+    <div class="greet"><span class="bob">${doriSVG("happy",84)}</span><div class="bubble">${greeting()}<br><span class="muted">だれが べんきょうする？</span></div></div>
+    ${PROF.list.map(pf=>`<button class="subjcard who" onclick="pickWho('${esc(pf.id)}')">
+      <span class="sic" style="background:linear-gradient(135deg,${pf.level==="小学"?"#F8A35E,#F6C55B":"#B49CF2,#F3A6C8"})">${pf.icon}</span>
+      <span class="st"><span class="sn">${esc(pf.name)}</span><div class="muted">${pf.level==="小学"?"漢字":"社会・英語・理科"}</div></span>
+      ${pf.id===PROF.cur?`<span class="go" style="background:#C9C0CC">前回</span>`:""}</button>`).join("")}`;
+}
+async function pickWho(id){
+  PROF.cur=id; saveProfiles(); load(); SUBJ = DB.ui.subj && subjectsAll().includes(DB.ui.subj) ? DB.ui.subj : "";
+  try{ sessionStorage.setItem("manadori:who","1"); }catch(e){}
+  await refreshPending(); tsel=null; session=null; go("#top");
 }
 
 /* ---------- トップページ ---------- */
@@ -650,11 +782,11 @@ function renderTop(){
         <div class="bar" style="margin-top:6px"><i style="width:${L.lv[2]/tot*100}%;background:${t.c}"></i><i style="width:${L.lv[1]/tot*100}%;background:${t.g1};opacity:.55"></i></div></span>
       <span class="go" style="background:${n?t.c:"#C9C0CC"}">${n?`今日 ${n}問`:"完了 ✓"}</span></button>`;
   }).join("");
-  const msg = !Object.keys(SETS).length ? "まずは設定から問題データを読み込んでね"
+  const msg = !allQ().length ? "まずは設定から問題データを読み込んでね"
     : left===0&&td.n ? "今日の分はぜんぶ終わり！すごい！"
     : dte!==null&&dte>=0&&dte<=7 ? `テストまであと${dte}日。苦手をつぶそう！` : "今日もいっしょにがんばろう！";
   app().innerHTML=`
-    <div class="top"><h1>まなドリ</h1><button class="icon" onclick="go('#settings')" aria-label="設定">⚙️</button></div>
+    <div class="top"><h1>まなドリ</h1><button class="whochip" onclick="go('#who')">${curProf().icon} ${esc(curProf().name)} ▾</button><button class="icon" onclick="go('#settings')" aria-label="設定">⚙️</button></div>
     <div class="greet"><span class="bob">${doriSVG(left===0&&td.n?"cheer":"normal",84)}</span>
       <div class="bubble">${greeting()}<br><span class="muted">${msg}</span></div></div>
     <div class="count">
@@ -662,7 +794,9 @@ function renderTop(){
       <div class="card"><div class="muted">連続</div><div class="big">${st}日</div></div>
       <div class="card"><div class="muted">今日</div><div class="big">${td.n||0}問</div></div></div>
     ${cards}
-    ${!Object.keys(SETS).length?`<button class="btn" onclick="go('#settings')">問題データを読み込む</button>`:""}`;
+    ${PENDING?`<button class="subjcard momcard" onclick="go('#mom')"><span class="sic" style="background:linear-gradient(135deg,#F79BC0,#F8A35E)">👩</span>
+      <span class="st"><span class="sn">おうちの人チェック</span><div class="muted">手書きの答えが ${PENDING}こ まってるよ</div></span><span class="go" style="background:#F0709F">${PENDING}</span></button>`:""}
+    ${!allQ().length?`<button class="btn" onclick="go('#settings')">問題データを読み込む</button>`:""}`;
 }
 
 /* ---------- 教科ホーム ---------- */
@@ -684,10 +818,11 @@ function renderHome(){
     ${hero}
     <div class="grid3">
       <button class="tile" onclick="go('#units')"><span class="ic">📖</span><b>単元練習</b></button>
-      <button class="tile" onclick="go('#test-setup')"><span class="ic">📝</span><b>模擬テスト</b></button>
+      ${SUBJ==="漢字" ? `<button class="tile" onclick="go('#mom')"><span class="ic">👩</span><b>おうちの人<br>チェック${PENDING?`（${PENDING}）`:""}</b></button>`
+        : `<button class="tile" onclick="go('#test-setup')"><span class="ic">📝</span><b>模擬テスト</b></button>`}
       <button class="tile" onclick="go('#stats')"><span class="ic">📊</span><b>記録</b></button>
     </div>
-    <p class="hint" style="text-align:center">同じ問題も「選ぶ・書く」など毎回ちがう聞き方で出ます。書く問題は${DB.settings.answerMode==="pad"?"手書きパッド":DB.settings.answerMode==="recall"?"思い出すだけ":"入力して自動採点"}（設定で変更）</p>`;
+    <p class="hint" style="text-align:center">${SUBJ==="漢字"?"同じ漢字が「読み」と「書き」でこうごに出ます。書いた字は おうちの人が チェックできます。":""}<span style="${SUBJ==="漢字"?"display:none":""}">同じ問題も「選ぶ・書く」など毎回ちがう聞き方で出ます。書く問題は${DB.settings.answerMode==="pad"?"手書きパッド":DB.settings.answerMode==="recall"?"思い出すだけ":"入力して自動採点"}（設定で変更）</p>`;
 }
 
 /* ---------- 練習 ---------- */
@@ -710,6 +845,11 @@ function answerQ(ok, note, soft, unsure){
     session.results.push({q, ok:ok&&!unsure, unsure:!!unsure});
   }
   if(!ok || unsure) requeue(q);
+  if(q.kmode==="kaki" && st.padImg && !st.checkKey){
+    const rec={prof:PROF.cur, date:today(), ts:Date.now(), qid:q.id, setId:q.setId, w:q.w, r:q.r, s:q.s||"", img:st.padImg,
+      self: unsure?"unsure":(ok?(soft?"trace":"ok"):"ng"), mom:null};
+    st.checkKey=-1; chkAdd(rec).then(k=>{ st.checkKey=k; session.kaki=(session.kaki||0)+1; refreshPending(); });
+  }
   renderQuiz();
   if(ok && !unsure) sparkle();
 }
@@ -719,6 +859,7 @@ function markUnsure(){   // 正解したけど自信がなかった（まぐれ�
   if("prev" in st){ if(st.prev) DB.prog[q.id]=st.prev; else delete DB.prog[q.id];
     const d=dayRec(); d.n=Math.max(0,d.n-1); d.c=Math.max(0,d.c-1); const s=d.subj[q.subject]; if(s){ s.n=Math.max(0,s.n-1); s.c=Math.max(0,s.c-1); }
     grade(q, true, false, {unsure:true, fmt:q.fmt}); delete st.prev; }
+  if(st.checkKey>0) chkAll().then(all=>{ const r=all.find(x=>x.k===st.checkKey); if(r){ r.self="unsure"; chkPut(r); } });
   const r=session.results.find(x=>x.q.id===q.id); if(r){ r.ok=false; r.unsure=true; }
   st.ok=false; st.unsure=true; st.soft=false; requeue(q); renderQuiz();
 }
@@ -726,6 +867,8 @@ function nextQ(){ stopAll(); session.i++; session.state={}; if(session.i>=sessio
 function quitSession(){ if(confirm("練習をやめますか？（ここまでの記録は保存されています）")){ session=null; go("#home"); } }
 function inputAttrs(en){ return en ? `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" lang="en" placeholder="英語で入力"` : `autocomplete="off" spellcheck="false" placeholder="答えを入力"`; }
 function kindPill(q){
+  if(q.kmode==="kaki") return `<span class="pill kind">✍️ 書き</span>`;
+  if(q.kmode==="yomi") return `<span class="pill kind">👀 読み</span>`;
   if(q.mode==="read") return `<span class="pill kind">👀 読み</span>`;
   if(q.fmt==="write" && (q.fmts||[]).length>1) return `<span class="pill kind">✍️ 書く</span>`;
   if(q.type==="choice") return `<span class="pill kind">☝️ 選ぶ</span>`;
@@ -735,15 +878,15 @@ function kindPill(q){
 }
 
 function renderQuiz(){
-  const q=curQ(), st=session.state, total=session.list.length, mode=DB.settings.answerMode||"type";
+  const q=curQ(), st=session.state, total=session.list.length, mode=q.kmode==="kaki" ? "pad" : (DB.settings.answerMode||"type");
   const en=q.type==="term" && isEn(q.a);
   const head=`<div class="top"><button class="back" onclick="quitSession()" aria-label="やめる">✕</button>
      <div class="progress"><i style="width:${Math.round(session.i/total*100)}%"></i></div><span class="muted">${session.i+1}/${total}</span></div>`;
-  const tags=`<div style="display:flex;gap:6px;flex-wrap:wrap">${kindPill(q)}<span class="pill">${esc(q.unit)} ${esc(q.sec||"")}</span>
+  const tags=`<div style="display:flex;gap:6px;flex-wrap:wrap">${kindPill(q)}<span class="pill">${esc(q.unit)}${q.sec&&q.sec!==q.unit?" "+esc(q.sec):""}</span>
      ${q.star?`<span class="pill star">★ マーカー</span>`:""}${q.retry?`<span class="pill" style="background:var(--ng-soft);color:var(--ng)">もう一度</span>`:""}</div>`;
   // 答える前に出すのは「聞き取り」と「英語→意味（読み）」のボタンだけ。自動では鳴らさない
   const sayFirst = q.say && (q.listen || q.mode==="read");
-  const qhead = imgTag(q) + passageBox(q) + (q.mode==="read"
+  const qhead = imgTag(q) + passageBox(q) + (q.kmode ? kanjiBlock(q) : "") + (q.mode==="read"
       ? `<div class="q">${qtext(q.q)}</div><div class="word ans-en">${esc(q.word)}</div>`
       : `<div class="q ${isEn(q.q)&&!hasJa(q.q)?"ans-en":""}">${qtext(q.q)}</div>`)
     + (sayFirst ? sayBtns(q.say, !!q.listen) : "")
@@ -752,14 +895,17 @@ function renderQuiz(){
   const after = st.done ? `
       <div class="verdict ${st.unsure?"mid pop":st.ok?"ok pop":"ng pop"}">${st.unsure?"🤔 だいじょうぶ、明日もう1回出すね":st.ok?(st.soft?"🔺 ヒントありで正解":"⭕ 正解！"):"💦 ざんねん"}</div>
       ${st.ok && !st.soft ? `<button class="btn ghost unsure" onclick="markUnsure()">🤔 じつは自信なかった（明日もう1回）</button>` : ""}
+      ${q.kmode==="kaki" && st.checkKey ? `<div class="ex">👩 この字は おうちの人チェックに 送ったよ</div>` : ""}
       ${st.note?`<div class="ex" style="color:var(--star)">✏️ ${esc(st.note)}</div>`:""}
-      ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${sayAfter}${exCard(q)}
-      <div class="ex">📘 教科書 ${esc(q.page||"")}</div>
+      ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${sayAfter}${exCard(q)}${q.kmode&&q.kmode!=="kaki"?`<div class="answer kans"><div class="kbig">${esc(q.w)}</div><div class="muted">${esc(q.r)}</div></div>${strokeBtn(q)}`:""}
+      ${q.page?`<div class="ex">📘 教科書 ${esc(q.page)}</div>`:""}
       <div class="spacer"></div><button class="btn" onclick="nextQ()">次へ ▶</button>` : "";
   const hintBox = st.hint ? `<div class="hintline ${en?"ans-en":""}">ヒント：${esc(hintText(q.a))}</div>` : "";
   const unsureBtn = `<button class="btn ghost unsure" onclick="giveUp()">🤔 わからない（明日もう1回）</button>`;
   const unsureBtn2 = `<button class="btn ghost unsure" onclick="giveUp()">🤔 自信ない（明日もう1回）</button>`;
-  const ansBox = mine=>`<div class="answer"><div class="muted">答え</div><div class="a ${en?"ans-en":""}">${esc(q.a)}</div>${mine||""}</div>`;
+  const ansBox = mine=>q.kmode==="kaki"
+    ? `<div class="answer kans"><div class="muted">正しい字</div><div class="kbig">${esc(q.a)}</div><div class="muted">${esc(q.r)}</div>${mine||""}</div>`
+    : `<div class="answer"><div class="muted">答え</div><div class="a ${en?"ans-en":""}">${esc(q.a)}</div>${mine||""}</div>`;
   let body="";
   if(q.type==="term"){
     if(mode==="type"){
@@ -772,11 +918,16 @@ function renderQuiz(){
           <button class="btn" onclick="termSubmit()">答える</button></div>`);
     }else if(mode==="pad"){
       body=qhead+(!st.reveal
-        ? `${hintBox}${padHTML()}<div class="spacer"></div><div class="row">
-            ${st.hint?"":`<button class="btn sub" onclick="session.state.hint=true;renderQuiz()">ヒント</button>`}
+        ? (q.kmode==="kaki"
+          ? `${padHTML([...q.w].length)}<div class="spacer"></div><div class="row">
+            ${st.trace?"":`<button class="btn sub" onclick="session.state.hint=true;session.state.trace=true;padRedraw();this.remove()">うすく見る（なぞる）</button>`}
             <button class="btn" onclick="padReveal()">答え合わせ</button></div>${unsureBtn}`
+          : `${hintBox}${padHTML()}<div class="spacer"></div><div class="row">
+            ${st.hint?"":`<button class="btn sub" onclick="session.state.hint=true;renderQuiz()">ヒント</button>`}
+            <button class="btn" onclick="padReveal()">答え合わせ</button></div>${unsureBtn}`)
         : `${st.padImg?`<img class="mine" src="${st.padImg}" alt="あなたの答え">`:`<p class="muted">（書かずに答えを見ました）</p>`}${ansBox("")}
-          ${st.done?after:`<p class="hint">自分の字と答えをくらべよう。漢字やつづりのまちがいも×にしよう。</p><div class="row">
+          ${q.kmode==="kaki"?strokeBtn(q):""}
+          ${st.done?after:`<p class="hint">${q.kmode==="kaki"?"自分の字と正しい字をくらべよう。とめ・はね・はらい、点や線の数もよく見てね。":"自分の字と答えをくらべよう。漢字やつづりのまちがいも×にしよう。"}</p><div class="row">
             <button class="btn ng" onclick="answerQ(false)">✕ まちがえた</button>
             <button class="btn ok" onclick="answerQ(true,'',session.state.hint)">○ 書けた</button></div>${unsureBtn2}`}`);
     }else{
@@ -828,7 +979,9 @@ function renderQuiz(){
 function pickChoice(i){ const st=session.state, q=curQ(); st.pick=st.opts[i]; answerQ(st.pick===q.a,"",st.hint); }
 function termSubmit(){ const st=session.state, v=$("#inp").value, r=termCheck(curQ(), v); st.input=v; answerQ(r.ok, r.note, st.hint); }
 function termGiveUp(){ giveUp(); }
-function padReveal(){ const st=session.state, c=$("#pad"); st.padImg=(st.strokes&&st.strokes.length&&c)?c.toDataURL("image/png"):null; st.reveal=true; renderQuiz(); }
+function padReveal(){ const st=session.state, c=$("#pad");
+  if(st.strokes&&st.strokes.length&&c){ const tr=st.trace; st.trace=false; padRedraw(); st.padImg=c.toDataURL("image/png"); st.trace=tr; } else st.padImg=null;
+  st.reveal=true; renderQuiz(); }
 function fixOk(){
   const q=curQ(), st=session.state;
   if("prev" in st){ if(st.prev) DB.prog[q.id]=st.prev; else delete DB.prog[q.id];
@@ -853,16 +1006,81 @@ function renderDone(){
       <div class="score">${ok}<span style="font-size:24px"> / ${r.length}</span></div><p style="margin:6px 0 0"><b>${msg}</b></p></div>
     ${uns?`<p class="hint" style="text-align:center">🤔 わからない・自信なし：${uns}問（明日もう1回出ます）</p>`:""}
     ${ng.length?`<h2>まちがえた・自信なしの問題</h2><div class="card list">${ng.map(x=>`<div class="it"><div class="t">
-        <div style="font-size:15px">${qtext(x.q.type==="calc"?x.q.calc.q:x.q.mode==="read"?x.q.word+" の意味":x.q.q)}</div>
+        <div style="font-size:15px">${x.q.kmode?esc((x.q.s||x.q.w).replace(/[［］]/g,""))+(x.q.kmode==="kaki"?"（書き）":"（読み）"):qtext(x.q.type==="calc"?x.q.calc.q:x.q.mode==="read"?x.q.word+" の意味":x.q.q)}</div>
         <div style="font-weight:700;color:var(--pri-deep)">${esc(answerText(x.q))}</div></div></div>`).join("")}</div>`:""}
+    ${session.kaki?`<button class="btn sub" onclick="session=null;go('#mom')">👩 書いた字を おうちの人に 見てもらう（${session.kaki}こ）</button><div class="spacer"></div>`:""}
     <button class="btn" onclick="session=null;go('#home')">${esc(SUBJ)}のページへ</button>`;
 }
 function answerText(q){
+  if(q.kmode) return q.w+"（"+q.r+"）";
   if(q.type==="choice"||q.type==="term") return q.a;
   if(q.type==="order") return q.inline ? q.items.join(" ") : q.items.map((t,i)=>(i+1)+"."+t).join(" → ");
   if(q.type==="write") return "（模範解答）"+q.a;
   if(q.type==="calc") return q.calc.ans+" "+q.calc.unit;
   return "";
+}
+
+/* ---------- おうちの人チェック ---------- */
+let MOMLIST=[], MOMSHOW="todo";
+async function renderMom(){
+  const all=(await chkAll()).filter(r=>r.prof===PROF.cur).sort((a,b)=>b.ts-a.ts);
+  MOMLIST = MOMSHOW==="todo" ? all.filter(r=>!r.mom) : all.slice(0,60);
+  const todo=all.filter(r=>!r.mom).length;
+  const selfLbl={ok:"⭕ 自分で○", ng:"❌ 自分で×", unsure:"🤔 自信なし", trace:"🔺 なぞって正解"};
+  app().innerHTML=`${topbar("👩 おうちの人チェック", SUBJ?"#home":"#top")}
+    <div class="card"><b>${esc(curProf().name)}が 書いた字</b><div class="muted">本人の○×のあとに、おうちの人が見て ⭕／❌ をつけてください。❌にした字は、明日もう一度「書き」で出ます。</div>
+      <div class="seg"><button class="${MOMSHOW==="todo"?"on":""}" onclick="MOMSHOW='todo';renderMom()">まだ（${todo}）</button><button class="${MOMSHOW==="all"?"on":""}" onclick="MOMSHOW='all';renderMom()">ぜんぶ（最近60）</button></div>
+      ${MOMLIST.length?`<div class="spacer"></div><div class="row"><button class="btn sub" onclick="momShare()">📤 チェック表を送る</button>${MOMSHOW==="todo"?`<button class="btn ok" onclick="momAllOk()">ぜんぶ ⭕</button>`:""}</div>`:""}
+      ${PROF.momEmail?"":`<p class="hint">設定で おうちの人のメールアドレスを入れておくと、メールでも送れます。</p>`}</div>
+    ${MOMLIST.length?MOMLIST.map((r,i)=>`<div class="card momrow">
+      <div class="muted">${esc(r.date.slice(5).replace("-","/"))}　${esc((r.s||r.w).replace(/[［］]/g,""))}</div>
+      <div class="momgrid"><div><div class="muted">書いた字</div><img src="${r.img}" class="momimg" alt=""></div>
+        <div><div class="muted">正しい字</div><div class="kbig">${esc(r.w)}</div><div class="muted">${esc(r.r)}</div></div></div>
+      <div class="muted">本人：${selfLbl[r.self]||r.self}${r.mom?`　／　おうちの人：${r.mom==="ok"?"⭕":"❌"}`:""}</div>
+      <div class="row" style="margin-top:8px"><button class="btn ${r.mom==="ng"?"ng":"ghost"}" onclick="momMark(${i},'ng')">❌ ちがう</button><button class="btn ${r.mom==="ok"?"ok":"ghost"}" onclick="momMark(${i},'ok')">⭕ あってる</button></div></div>`).join("")
+      :`<div class="card emptybox">${doriSVG("cheer",80)}<p><b>チェックする字は ありません</b></p></div>`}`;
+}
+async function momMark(i, v){
+  const r=MOMLIST[i]; if(!r) return;
+  r.mom=v; r.momAt=Date.now(); await chkPut(r);
+  if(v==="ng"){   // ちがっていたら、明日もう一度「書き」で出す
+    const p=DB.prog[r.qid]; if(p){ p.box=1; p.due=addDays(today(),1); p.fmt=p.fmt||{}; p.fmt.kaki=0; p.lastFmt="yomi"; p.hist=(p.hist||"").slice(0,-1)+"0"; save(); }
+  }
+  await refreshPending(); renderMom();
+}
+async function momAllOk(){ for(const r of MOMLIST.filter(x=>!x.mom)){ r.mom="ok"; r.momAt=Date.now(); await chkPut(r); } await refreshPending(); renderMom(); toast("ぜんぶ ⭕ にしました"); }
+/* チェック表（画像）を作って、メール・LINEで送る */
+async function momSheet(rows){
+  const W=1080, rowH=230, head=150, H=head+rows.length*rowH+60, c=document.createElement("canvas"); c.width=W; c.height=H;
+  const x=c.getContext("2d"); x.fillStyle="#FFF8F3"; x.fillRect(0,0,W,H);
+  x.fillStyle="#3A3140"; x.font="bold 44px ZenMaru, sans-serif"; x.fillText("まなドリ　漢字チェック表",40,70);
+  x.font="28px ZenMaru, sans-serif"; x.fillStyle="#8A7F8F"; x.fillText(`${curProf().name}　${today()}　${rows.length}こ`,40,118);
+  const load=src=>new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=src; });
+  const selfLbl={ok:"本人○", ng:"本人×", unsure:"本人？", trace:"なぞり○"};
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i], y=head+i*rowH; x.fillStyle=i%2?"#FFFFFF":"#FFF1F5"; x.fillRect(20,y,W-40,rowH-14);
+    x.fillStyle="#3A3140"; x.font="bold 34px ZenMaru, sans-serif"; x.fillText(String(i+1),40,y+60);
+    x.font="26px ZenMaru, sans-serif"; x.fillStyle="#8A7F8F"; const sent=(r.s||r.w).replace(/[［］]/g,""); x.fillText(sent.length>18?sent.slice(0,18)+"…":sent,90,y+44);
+    x.fillText(`（${r.r}）`,90,y+84);
+    const im=await load(r.img); if(im){ const h=rowH-40, w=Math.min(470, im.width*h/im.height); x.fillStyle="#fff"; x.fillRect(90,y+100-6,w,h-60); x.drawImage(im,90,y+96,w,h-64); }
+    x.fillStyle="#3A3140"; x.font=`110px ${KFONT}`; x.fillText(r.w,620,y+150);
+    x.font="bold 28px ZenMaru, sans-serif"; x.fillStyle="#D25A1E"; x.fillText(selfLbl[r.self]||"",900,y+60);
+    x.strokeStyle="#C9C0CC"; x.lineWidth=3; x.strokeRect(930,y+90,90,90);   // おうちの人が ○× を書きこむ欄
+  }
+  x.font="24px ZenMaru, sans-serif"; x.fillStyle="#8A7F8F"; x.fillText("左：書いた字　右：正しい字　□：おうちの人の○×",40,H-24);
+  return await new Promise(res=>c.toBlob(res,"image/png"));
+}
+async function momShare(){
+  const rows=MOMLIST.slice(0,20); if(!rows.length) return;
+  const blob=await momSheet(rows); const name=`kanji-check-${today()}.png`;
+  const file=new File([blob], name, {type:"image/png"});
+  const text=`${curProf().name}の漢字チェック表（${today()}・${rows.length}こ）\n`+rows.map((r,i)=>`${i+1}. ${r.w}（${r.r}） 本人:${({ok:"○",ng:"×",unsure:"？",trace:"なぞり○"})[r.self]||""}`).join("\n");
+  try{
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:"漢字チェック表", text}); return; }
+  }catch(e){ if(e && e.name==="AbortError") return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+  if(PROF.momEmail){ setTimeout(()=>{ location.href=`mailto:${encodeURIComponent(PROF.momEmail)}?subject=${encodeURIComponent("漢字チェック表 "+today())}&body=${encodeURIComponent(text+"\n\n（チェック表の画像はダウンロードフォルダに保存しました。添付してください）")}`; }, 600); }
+  else toast("チェック表を画像で保存しました（ダウンロード）");
 }
 
 /* ---------- 単元練習 ---------- */
@@ -1060,6 +1278,14 @@ const MODES=[
 function renderSettings(){
   const S=DB.settings, m=S.answerMode||"type", back=SUBJ&&location.hash==="#settings"&&history.length>1;
   app().innerHTML=topbar("⚙️ 設定", SUBJ?"#home":"#top")+`
+    <h2>つかう人</h2>
+    <div class="card">${PROF.list.map((pf,i)=>`<div style="display:flex;gap:8px;align-items:center;margin:6px 0"><span style="font-size:24px">${pf.icon}</span>
+        <input class="field" style="margin:0" value="${esc(pf.name)}" onchange="PROF.list[${i}].name=this.value||PROF.list[${i}].name;saveProfiles()">
+        <span class="muted" style="white-space:nowrap">${pf.level}</span></div>`).join("")}
+      <p class="hint">いまは「${esc(curProf().name)}」の設定と記録を表示しています。切りかえはトップページの名前ボタンから。</p>
+      <b>おうちの人のメールアドレス</b>
+      <input class="field" type="email" placeholder="例：mama@example.com" value="${esc(PROF.momEmail||"")}" onchange="PROF.momEmail=this.value.trim();saveProfiles();toast('保存しました')">
+      <p class="hint">漢字の「チェック表を送る」で使います。スマホの共有メニューが使えるときは、そこからメールやLINEを選べます。</p></div>
     <h2>問題の出し方</h2>
     <div class="card">${subjectsAll().map(s=>`<div style="display:flex;align-items:center;gap:10px;margin:6px 0">
         <b style="width:4em">${theme(s).icon} ${esc(s)}</b><div class="seg" style="margin:0">${Object.keys(MIXV).map(k=>`<button class="${(S.mix[s]||"mid")===k?"on":""}" onclick="DB.settings.mix['${esc(s)}']='${k}';save();renderSettings()">${MIX_LABEL[k]}</button>`).join("")}</div></div>`).join("")}
@@ -1079,7 +1305,7 @@ function renderSettings(){
     <h2>問題データ</h2>
     <div class="card">
       ${Object.keys(SETS).length?`<div class="list">${Object.entries(SETS).map(([id,s])=>`<div class="it"><div class="t">
-          <b>${theme(s.subject).icon} ${esc(s.subject)}・${esc(s.unit)}</b><div class="muted">${s.questions.length}問${s.images?"・図"+Object.keys(s.images).length+"枚":""}${s.audio?"・音声"+Object.keys(s.audio).length:""}${s.version?"・ver."+s.version:""}</div>${missingImg(id)?`<div style="color:var(--ng);font-size:13px;font-weight:700">⚠️ 図が入っていません。読み込み直してね</div>`:""}</div>
+          <b>${theme(s.subject).icon} ${esc(s.subject)}・${esc(s.unit)}</b> <span class="pill">${esc(setLevel(s))}</span><div class="muted">${s.questions.length}問${s.images?"・図"+Object.keys(s.images).length+"枚":""}${s.audio?"・音声"+Object.keys(s.audio).length:""}${s.version?"・ver."+s.version:""}</div>${missingImg(id)?`<div style="color:var(--ng);font-size:13px;font-weight:700">⚠️ 図が入っていません。読み込み直してね</div>`:""}</div>
           <button class="btn ghost" style="width:auto;min-height:40px" onclick="delSet('${esc(id)}')">削除</button></div>`).join("")}</div>`:`<p class="muted">まだ読み込まれていません</p>`}
       <div class="spacer"></div>
       <label class="btn">ファイルから読み込む<input type="file" accept=".json,application/json" style="display:none" onchange="importFile(this.files[0],'data')"></label>
@@ -1113,7 +1339,7 @@ async function importText(text, kind){
   if(!d || d.format!=="manadori-v1" || !Array.isArray(d.questions) || !d.set){ toast("まなドリ用の問題データではありません"); return; }
   if(d.questions.find(q=>!q.id||!q.type)){ toast("問題データにこわれた部分があります"); return; }
   const isNew=!SETS[d.set];
-  await putSet(d.set,{subject:d.subject||"", unit:d.unit||d.set, source:d.source||"", version:d.version||1, lang:d.lang||"", images:d.images||null, audio:d.audio||null, questions:d.questions});
+  await putSet(d.set,{subject:d.subject||"", unit:d.unit||d.set, level:d.level||"中学", source:d.source||"", version:d.version||1, lang:d.lang||"", images:d.images||null, audio:d.audio||null, strokes:d.strokes||null, credits:d.credits||"", questions:d.questions});
   toast(`${d.subject}・${d.unit}：${d.questions.length}問を${isNew?"読み込み":"更新し"}ました`); renderSettings();
 }
 async function delSet(id){ if(!confirm("この単元の問題を削除しますか？（学習記録も消えます）")) return;
@@ -1127,12 +1353,15 @@ function resetProgress(){ if(!confirm("学習記録と模擬テストの記録�
 
 /* ---------- 起動 ---------- */
 (async function boot(){
-  load();
+  loadProfiles(); load();
   app().innerHTML=`<div class="card emptybox">${doriSVG("normal",80)}<p class="muted">読み込み中…</p></div>`;
   idb=await idbOpen(); SETS=await idbAll();
   if(LEGACY_SETS){ for(const [id,s] of Object.entries(LEGACY_SETS)) if(!SETS[id]) await putSet(id,s); if(idb) save(); LEGACY_SETS=null; }
   SUBJ = DB.ui.subj && subjectsAll().includes(DB.ui.subj) ? DB.ui.subj : "";
-  if(!location.hash || ["#quiz","#done","#test","#result"].includes(location.hash)) history.replaceState(null,"","#top");
+  await refreshPending();
+  let asked=false; try{ asked=!!sessionStorage.getItem("manadori:who"); }catch(e){}
+  if(!location.hash || ["#quiz","#done","#test","#result","#mom"].includes(location.hash)) history.replaceState(null,"","#top");
+  if(!asked) history.replaceState(null,"","#who");   // アプリを開いたら、まず「だれが べんきょうする？」
   route();
 })();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",()=>route());
