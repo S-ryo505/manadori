@@ -178,7 +178,7 @@ body.gquake #app{animation:gquake .7s linear}
 @keyframes gbgin{0%{background-color:rgba(255,255,255,0)}}
 .gwhat{position:absolute;top:16%;font-size:56px;font-weight:800;color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.2);animation:gwhat 1.3s ease-out both}
 @keyframes gwhat{0%{transform:scale(.2);opacity:0}25%{transform:scale(1.25);opacity:1}40%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-20px)}}
-.ggive{border:0;border-radius:99px;padding:7px 12px;font:inherit;font-size:13px;font-weight:700;background:var(--card);color:var(--sub);box-shadow:var(--shadow);margin-left:auto;margin-right:8px;white-space:nowrap}
+.ggive{border:0;border-radius:99px;padding:7px 10px;font:inherit;font-size:13px;font-weight:700;background:var(--card);color:var(--sub);box-shadow:var(--shadow);margin-left:auto;margin-right:8px;white-space:nowrap}
 .gghost rect{opacity:.55}
 .gintro{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .45s}
 .gintro.out{opacity:0}
@@ -192,7 +192,8 @@ body.gquake #app{animation:gquake .7s linear}
 .gemcell b{font-size:18px;color:#3A3140;line-height:1.2}
 .gemshelf.big .gemcell b{font-size:24px}
 .gamelock{text-align:center}
-.gtop h1{font-size:18px}
+.gtop h1{font-size:18px;white-space:nowrap}
+.gtop h1 .pill{font-size:11px;padding:2px 6px}
 .hourglass{display:flex;align-items:center;gap:4px;background:var(--card);border-radius:16px;padding:4px 10px 4px 6px;box-shadow:var(--shadow)}
 .hourglass .hgt{display:flex;flex-direction:column;align-items:center;line-height:1.1}
 .hourglass .hgt b{font-size:20px;font-variant-numeric:tabular-nums}
@@ -286,7 +287,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.7.1";
+const APP_VER = "1.7.2";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -1395,9 +1396,11 @@ function renderGame(){
 function startPuzzle(){
   if(location.hash!=="#game") return;
   const g=gameData(), dbg=isDebug();
-  let cur=g.cur && (g.cur.date===today()||dbg) ? g.cur : null;
-  if(!cur || dbg && cur.done){
-    const puz=genPuzzle(g.cleared);
+  // デバッグ中は毎回あたらしい枠（子どもの「続き」には さわらない）
+  let cur=!dbg && g.cur && g.cur.date===today() ? g.cur : null;
+  if(!cur){
+    const puz=genPuzzle(dbg ? (g.cleared||[]).concat(GDBG_SEEN) : g.cleared);
+    if(dbg) GDBG_SEEN.push(puz.sig);
     cur={date:today(), puz, start:Date.now(), done:false};
     if(!dbg){ g.cur=cur; save(); }
   }
@@ -1407,11 +1410,14 @@ function startPuzzle(){
   clearInterval(GZ.tm); if(!GZ.giveup) GZ.tm=setInterval(gTick,100);
 }
 
+let GDBG_SEEN=[];   // デバッグ中に出した枠（同じものを出さない）
+function gNext(){ if(GZ) clearInterval(GZ.tm); document.querySelectorAll(".gclear").forEach(x=>x.remove()); GZ=null; startPuzzle(); }
+
 /* ---- 画面：パズル ---- */
 function renderPuzzle(){
   const P=GZ.puz, W=Math.min(app().clientWidth||360, 560);
   const H=window.innerHeight||760;   // スマホの見える高さに、わく＋ブロック置き場＋ボタンが収まる大きさ
-  const cs=Math.max(28, Math.min(52, Math.floor((W-16)/8.4), Math.floor((H-200)/(P.h+8))));
+  const cs=Math.max(28, Math.min(52, Math.floor((W-16)/8.4), Math.floor((H-(GZ.debug?262:200))/(P.h+8))));
   const bw=P.w*cs, bh=P.h*cs, bx=Math.round((W-bw)/2), by=14;
   const slotW=W/2, slotH=4*cs+6, ty=by+bh+28;
   GZ.cs=cs; GZ.bx=bx; GZ.by=by; GZ.ty=ty; GZ.slotW=slotW; GZ.slotH=slotH; GZ.W=W;
@@ -1427,6 +1433,7 @@ function renderPuzzle(){
       ${P.pieces.map(id=>`<div class="gpiece" id="gp-${id}" data-id="${id}"></div>`).join("")}
     </div>
     <div class="gctrl"><button class="btn sub" onclick="gRotate()">↻ まわす</button><button class="btn sub" onclick="gFlip()">⇋ うらがえす</button></div>
+    ${GZ.debug?`<button class="btn ghost" style="margin-top:8px" onclick="gNext()">🛠 次のゲームへ ⏭</button>`:""}
     <p class="hint" style="text-align:center" id="ghint">${GZ.giveup?"🏳️ うすい色のとおりに、同じ色のブロックをおいてみよう":"ブロックを指で動かして、白いわくにぴったり入れよう。ブロックをタップしてもまわせるよ。"}</p>`;
   P.pieces.forEach((id,i)=>{ drawPiece(id); if(!GZ.place[id]) toTray(id); else putAt(id,GZ.place[id][0],GZ.place[id][1]); bindPiece(id); });
   if(GZ.giveup){ drawGhost(); gFlag(); } else gTick();
@@ -1551,7 +1558,7 @@ function gCheck(){
     ${GZ.giveup?`<p><b>ギブアップしたので、ダイヤはなし</b><br><span class="muted">つぎは 自分の力で ぴったりを めざそう！</span></p>`:gem?`<div class="gcgem">${gemSVG(gem.c,96)}</div><p><b>${gem.name}のダイヤ ゲット！</b></p>`:`<p><b>30秒をこえたので、ダイヤはなし…</b><br><span class="muted">明日は30秒以内をめざそう！</span></p>`}
     ${GZ.debug?`<p class="muted">🛠 デバッグモード：ダイヤは記録されません</p>`:""}
     ${gemShelf(gameData(),false)}
-    ${GZ.debug?`<button class="btn" onclick="this.closest('.gclear').remove();GZ=null;startPuzzle()">🛠 もう1回</button><div class="spacer"></div>`:""}
+    ${GZ.debug?`<button class="btn" onclick="gNext()">🛠 次のゲームへ ⏭</button><div class="spacer"></div>`:""}
     <button class="btn ${GZ.debug?"ghost":""}" onclick="this.closest('.gclear').remove();GZ=null;go(GRET||'#top')">もどる</button></div>`;
   document.body.appendChild(ov);
   if(gem) for(let i=0;i<18;i++){ const s=document.createElement("span"); s.className="gconf"; s.style.left=Math.random()*100+"%"; s.style.animationDelay=(Math.random()*.6)+"s";
