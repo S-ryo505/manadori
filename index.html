@@ -234,7 +234,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.5.0";
+const APP_VER = "1.5.2";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -494,6 +494,7 @@ function chooseFmt(q, fmts){
 function buildFmt(q, f){
   const base={fmt:f, fmts:formatsOf(q)};
   if(q.type==="kanji"){
+    if(q.alt && q.alt.length) q=Object.assign({},q,{s:pick([q.s].concat(q.alt))});   // 例文は毎回ちがうものを
     if(f==="yomipick"){ const pool=SETS[q.setId].questions.filter(x=>x.type==="kanji").map(x=>({s:x.r, sec:x.sec, t:1}));
       const wrong=makeDistractors({a:q.r, sec:q.sec, accept:[]}, pool) || kanaDistract(q.r);
       return wrong ? Object.assign({},q,base,{type:"choice", kmode:"yomi", q:"――の ことばの 読みかたは？", a:q.r, wrong}) : null; }
@@ -758,7 +759,7 @@ function dailyPlan(subj){
   const max=DB.settings.sessionMax, dueSel=due.slice(0,max);
   const d=DB.days[t], doneNew=(d&&d.subj&&d.subj[subj]&&d.subj[subj].nw)||0;
   const newSlots=Math.max(0, Math.min(DB.settings.newPerDay-doneNew, max-dueSel.length));
-  const bySet={}; qs.filter(q=>!prog(q.id)).forEach(q=>(bySet[q.setId] ||= []).push(q));
+  const bySet={}; qs.filter(q=>!prog(q.id)).sort((a,b)=>(b.miss?1:0)-(a.miss?1:0)).forEach(q=>(bySet[q.setId] ||= []).push(q));   // ドリルでまちがえた言葉を先に
   const lists=Object.values(bySet), fresh=[];
   for(let k=0; fresh.length<newSlots && lists.some(l=>l.length); k++){ const l=lists[k%lists.length]; if(l.length) fresh.push(l.shift()); }
   return {due:dueSel, fresh};
@@ -883,7 +884,7 @@ function renderQuiz(){
   const head=`<div class="top"><button class="back" onclick="quitSession()" aria-label="やめる">✕</button>
      <div class="progress"><i style="width:${Math.round(session.i/total*100)}%"></i></div><span class="muted">${session.i+1}/${total}</span></div>`;
   const tags=`<div style="display:flex;gap:6px;flex-wrap:wrap">${kindPill(q)}<span class="pill">${esc(q.unit)}${q.sec&&q.sec!==q.unit?" "+esc(q.sec):""}</span>
-     ${q.star?`<span class="pill star">★ マーカー</span>`:""}${q.retry?`<span class="pill" style="background:var(--ng-soft);color:var(--ng)">もう一度</span>`:""}</div>`;
+     ${q.star?`<span class="pill star">★ マーカー</span>`:""}${q.miss?`<span class="pill star">📌 ドリルでまちがえた</span>`:""}${q.retry?`<span class="pill" style="background:var(--ng-soft);color:var(--ng)">もう一度</span>`:""}</div>`;
   // 答える前に出すのは「聞き取り」と「英語→意味（読み）」のボタンだけ。自動では鳴らさない
   const sayFirst = q.say && (q.listen || q.mode==="read");
   const qhead = imgTag(q) + passageBox(q) + (q.kmode ? kanjiBlock(q) : "") + (q.mode==="read"
@@ -1110,6 +1111,8 @@ function openPractice(encKey, isUnit){
   const filters={ all:{label:"全部", f:()=>true},
     weak:{label:"苦手だけ", f:q=>{const p=prog(q.id); return p && (p.box<=1 || p.hist.slice(-1)==="0");}},
     star:{label:"★マーカー", f:q=>q.star}, fresh:{label:"未学習", f:q=>!prog(q.id)} };
+  if(!qs.some(q=>q.star)) delete filters.star;
+  if(qs.some(q=>q.miss)) filters.miss={label:"📌 ドリルでまちがえた", f:q=>q.miss};
   if(qs.some(q=>q.img)) filters.img={label:"🗺️ 地図・図表", f:q=>!!q.img};
   if(qs.some(q=>q.listen)) filters.listen={label:"🔊 聞き取り", f:q=>!!q.listen};
   if(qs.some(q=>q.vocab)) filters.vocab={label:"🔤 単語", f:q=>!!q.vocab};
