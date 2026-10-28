@@ -170,6 +170,7 @@ h2{font-size:17px;margin:24px 6px 4px}
 @media (prefers-color-scheme:dark){.excard .hl{color:var(--pri)}}
 .warn{background:var(--ng-soft);border:2px solid var(--ng)}
 .verdict.mid{color:var(--star)}
+a.btn{text-decoration:none}
 .whochip{margin-left:auto;margin-right:6px;padding:8px 12px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);font-weight:700;font-size:14px}
 .top h1+.whochip{margin-left:auto}
 .subjcard.who .sic{font-size:34px}
@@ -234,7 +235,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.5.2";
+const APP_VER = "1.5.3";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -1031,8 +1032,8 @@ async function renderMom(){
   app().innerHTML=`${topbar("👩 おうちの人チェック", SUBJ?"#home":"#top")}
     <div class="card"><b>${esc(curProf().name)}が 書いた字</b><div class="muted">本人の○×のあとに、おうちの人が見て ⭕／❌ をつけてください。❌にした字は、明日もう一度「書き」で出ます。</div>
       <div class="seg"><button class="${MOMSHOW==="todo"?"on":""}" onclick="MOMSHOW='todo';renderMom()">まだ（${todo}）</button><button class="${MOMSHOW==="all"?"on":""}" onclick="MOMSHOW='all';renderMom()">ぜんぶ（最近60）</button></div>
-      ${MOMLIST.length?`<div class="spacer"></div><div class="row"><button class="btn sub" onclick="momShare()">📤 チェック表を送る</button>${MOMSHOW==="todo"?`<button class="btn ok" onclick="momAllOk()">ぜんぶ ⭕</button>`:""}</div>`:""}
-      ${PROF.momEmail?"":`<p class="hint">設定で おうちの人のメールアドレスを入れておくと、メールでも送れます。</p>`}</div>
+      ${MOMLIST.length?`<div class="spacer"></div><div class="row"><button class="btn sub" id="momsend" onclick="momShare()">📤 チェック表を送る</button>${MOMSHOW==="todo"?`<button class="btn ok" onclick="momAllOk()">ぜんぶ ⭕</button>`:""}</div>`:""}
+      ${MOMLIST.length?`<p class="hint">押すと共有メニューが開きます。Gmailなどを選んで、宛先を入れて送ってください。<a href="#" onclick="momSendSheet('');return false">ほかの送り方</a></p>`:""}</div>
     ${MOMLIST.length?MOMLIST.map((r,i)=>`<div class="card momrow">
       <div class="muted">${esc(r.date.slice(5).replace("-","/"))}　${esc((r.s||r.w).replace(/[［］]/g,""))}</div>
       <div class="momgrid"><div><div class="muted">書いた字</div><img src="${r.img}" class="momimg" alt=""></div>
@@ -1040,6 +1041,24 @@ async function renderMom(){
       <div class="muted">本人：${selfLbl[r.self]||r.self}${r.mom?`　／　おうちの人：${r.mom==="ok"?"⭕":"❌"}`:""}</div>
       <div class="row" style="margin-top:8px"><button class="btn ${r.mom==="ng"?"ng":"ghost"}" onclick="momMark(${i},'ng')">❌ ちがう</button><button class="btn ${r.mom==="ok"?"ok":"ghost"}" onclick="momMark(${i},'ok')">⭕ あってる</button></div></div>`).join("")
       :`<div class="card emptybox">${doriSVG("cheer",80)}<p><b>チェックする字は ありません</b></p></div>`}`;
+  momPrepare();
+}
+/* 送る準備：タップの前にチェック表の画像と文面を作っておく（Androidは、タップからすぐでないと共有を開かせてくれないため） */
+let MOMPACK=null, MOMPREP=0;
+async function momPrepare(){
+  const my=++MOMPREP, rows=MOMLIST.slice(0,20); MOMPACK=null;
+  const btn=$("#momsend"); if(!rows.length) return;
+  if(btn){ btn.disabled=true; btn.textContent="⏳ じゅんび中…"; }
+  const blob=await momSheet(rows); if(my!==MOMPREP) return;
+  const name=`kanji-check-${today()}.png`, file=new File([blob], name, {type:"image/png"});
+  const mark={ok:"○",ng:"×",unsure:"？",trace:"なぞり○"};
+  const text=`${curProf().name}の漢字チェック表（${today()}・${rows.length}こ）\n`+rows.map((r,i)=>`${i+1}. ${r.w}（${r.r}）　本人:${mark[r.self]||""}${r.mom?"　チェック:"+(r.mom==="ok"?"○":"×"):""}`).join("\n");
+  MOMPACK={blob, file, name, text, url:URL.createObjectURL(blob)};
+  const b2=$("#momsend"); if(b2){ b2.disabled=false; b2.textContent="📤 チェック表を送る"; }
+}
+function momMailto(){
+  const P=MOMPACK; if(!P) return "#";
+  return `mailto:${encodeURIComponent(PROF.momEmail||"")}?subject=${encodeURIComponent(curProf().name+"の漢字チェック表 "+today())}&body=${encodeURIComponent(P.text+"\n\n（チェック表の画像は、保存した画像を添付してください）")}`;
 }
 async function momMark(i, v){
   const r=MOMLIST[i]; if(!r) return;
@@ -1071,17 +1090,30 @@ async function momSheet(rows){
   x.font="24px ZenMaru, sans-serif"; x.fillStyle="#8A7F8F"; x.fillText("左：書いた字　右：正しい字　□：おうちの人の○×",40,H-24);
   return await new Promise(res=>c.toBlob(res,"image/png"));
 }
-async function momShare(){
-  const rows=MOMLIST.slice(0,20); if(!rows.length) return;
-  const blob=await momSheet(rows); const name=`kanji-check-${today()}.png`;
-  const file=new File([blob], name, {type:"image/png"});
-  const text=`${curProf().name}の漢字チェック表（${today()}・${rows.length}こ）\n`+rows.map((r,i)=>`${i+1}. ${r.w}（${r.r}） 本人:${({ok:"○",ng:"×",unsure:"？",trace:"なぞり○"})[r.self]||""}`).join("\n");
-  try{
-    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:"漢字チェック表", text}); return; }
-  }catch(e){ if(e && e.name==="AbortError") return; }
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
-  if(PROF.momEmail){ setTimeout(()=>{ location.href=`mailto:${encodeURIComponent(PROF.momEmail)}?subject=${encodeURIComponent("漢字チェック表 "+today())}&body=${encodeURIComponent(text+"\n\n（チェック表の画像はダウンロードフォルダに保存しました。添付してください）")}`; }, 600); }
-  else toast("チェック表を画像で保存しました（ダウンロード）");
+function momShare(){
+  const P=MOMPACK; if(!P){ toast("じゅんび中です。少し待ってからもう一度押してね"); return; }
+  // タップの直後に共有メニューを開く（await をはさまない）
+  let p=null;
+  try{ if(navigator.canShare && navigator.canShare({files:[P.file]})) p=navigator.share({files:[P.file], title:"漢字チェック表", text:P.text}); }catch(e){ p=Promise.reject(e); }
+  if(!p){ momSendSheet("この端末では、画像をそのまま共有できませんでした。"); return; }
+  p.then(()=>toast("送りました")).catch(e=>{ if(e && e.name==="AbortError") return; momSendSheet(`共有メニューが開けませんでした（${e&&e.name||"不明"}）。`); });
+}
+/* 共有がだめなときの、自分でタップして送る方法 */
+function momSendSheet(reason){
+  const P=MOMPACK; if(!P) return;
+  const bg=document.createElement("div"); bg.className="sheet-bg";
+  bg.innerHTML=`<div class="sheet"><b style="font-size:18px">📤 チェック表の送り方</b>
+    ${reason?`<p class="muted">${esc(reason)}</p>`:""}
+    <a class="btn" href="${P.url}" download="${esc(P.name)}">① 💾 チェック表の画像を保存</a>
+    <div class="spacer"></div>
+    <a class="btn sub" href="${momMailto()}">② 📧 メールアプリで送る${PROF.momEmail?"（宛先："+esc(PROF.momEmail)+"）":""}</a>
+    <p class="hint">メールには、書いた言葉と本人の○×の一覧が入ります。保存した画像（ダウンロードフォルダ）を添付すると、書いた字も見てもらえます。</p>
+    <button class="btn ghost" id="mtxt">文字だけ共有する（LINEなど）</button>
+    <div class="spacer"></div><button class="btn ghost" id="mcl">閉じる</button></div>`;
+  bg.querySelector("#mcl").onclick=()=>bg.remove();
+  bg.querySelector("#mtxt").onclick=()=>{ if(navigator.share) navigator.share({title:"漢字チェック表", text:P.text}).catch(()=>{}); else { try{ navigator.clipboard.writeText(P.text); toast("文字をコピーしました"); }catch(e){} } };
+  bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
 }
 
 /* ---------- 単元練習 ---------- */
