@@ -1,7 +1,7 @@
 /* まなドリ サービスワーカー
    画面はネットワーク優先（新しい版を置けば次に開いたとき反映）、オフライン時はキャッシュから起動。
    同じ github.io 上の他アプリ（家計簿など）のキャッシュには触らないよう、名前の頭を "manadori-" にそろえている。 */
-const V = "manadori-v17";
+const V = "manadori-v18";
 const SHELL = ["./klee-SemiBold.woff2", "./yuzungo.jpg", "./kokongo.jpg", "./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

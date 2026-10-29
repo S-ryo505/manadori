@@ -175,19 +175,19 @@ h2{font-size:17px;margin:24px 6px 4px}
 /* ---- ごほうびパズル ---- */
 body.gquake #app{animation:gquake .7s linear}
 @keyframes gquake{10%,50%,90%{transform:translate(-5px,2px) rotate(-.6deg)}30%,70%{transform:translate(5px,-2px) rotate(.6deg)}100%{transform:none}}
-.gintro{animation:gbgin .7s ease-out both}
-@keyframes gbgin{0%{background-color:rgba(255,255,255,0)}}
-.gwhat{position:absolute;top:16%;font-size:56px;font-weight:800;color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.2);animation:gwhat 1.3s ease-out both}
-@keyframes gwhat{0%{transform:scale(.2);opacity:0}25%{transform:scale(1.25);opacity:1}40%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-20px)}}
+.gintro{animation:gbgin .5s ease-out both}
+@keyframes gbgin{0%{opacity:0}}
 .ggive{border:0;border-radius:99px;padding:7px 10px;font:inherit;font-size:13px;font-weight:700;background:var(--card);color:var(--sub);box-shadow:var(--shadow);margin-left:auto;margin-right:8px;white-space:nowrap}
 .gghost rect{opacity:.55}
 .gintro{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .45s}
 .gintro.out{opacity:0}
-.glogo{width:min(86vw,460px);border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.35);animation:grise 1.9s cubic-bezier(.2,.8,.2,1) .7s both, gfloat 3s ease-in-out 2.6s infinite}
-.glogo.small{width:min(60vw,260px);animation:none;box-shadow:var(--shadow)}
+.glogo{width:min(92vw,500px);animation:grise 1.9s cubic-bezier(.2,.8,.2,1) .5s both, gfloat 3s ease-in-out 2.4s infinite;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent),linear-gradient(transparent,#000 14%,#000 86%,transparent);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent),linear-gradient(transparent,#000 14%,#000 86%,transparent);mask-composite:intersect}
+.glogo.small{width:min(60vw,260px);animation:none;box-shadow:var(--shadow);border-radius:18px;-webkit-mask-image:none;mask-image:none}
 @keyframes grise{0%{opacity:0;transform:translateY(70px) scale(.82);filter:blur(10px) brightness(.6)}60%{opacity:1;filter:blur(0) brightness(1.15)}100%{opacity:1;transform:none;filter:none}}
 @keyframes gfloat{50%{transform:translateY(-8px)}}
-.gintro-gems{animation:grise 1s ease-out 2.3s both;background:rgba(255,255,255,.92);border-radius:18px;padding:10px 14px}
+.gintro-gems{animation:grise 1s ease-out 2.1s both;background:rgba(255,255,255,.92);border-radius:18px;padding:10px 14px}
 .gemshelf{display:flex;gap:10px;justify-content:center}
 .gemcell{display:flex;flex-direction:column;align-items:center;min-width:52px;font-size:12px;color:var(--sub)}
 .gemcell b{font-size:18px;color:#3A3140;line-height:1.2}
@@ -288,7 +288,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.7.3";
+const APP_VER = "1.7.4";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -419,7 +419,7 @@ function grade(q, ok, soft, ex){
   const t=today(), p=DB.prog[q.id]||{box:0,n:0,c:0,hist:""};
   const good=ok&&!unsure;
   p.n++; if(good) p.c++;
-  p.fmt=p.fmt||{}; if(fmt){ p.fmt[fmt]=(good&&!soft)?1:0; p.lastFmt=fmt; if(q.type==="kanji"||q.kmode) p.sides=((p.sides||"")+(fmt==="kaki"?"k":"y")).slice(-3); }
+  p.fmt=p.fmt||{}; if(fmt){ p.fmt[fmt]=(good&&!soft)?1:0; p.lastFmt=fmt; if(q.type==="kanji"||q.kmode){ p.sides=((p.sides||"")+(fmt==="kaki"?"k":"y")).slice(-3); if(fmt==="kaki") delete p.forceKaki; } }
   if(unsure || !ok) p.box=1;
   else if(soft) p.box=Math.max(1,p.box);
   else { p.box=Math.min(p.box+1,5); if(!masteryOk(q,p.fmt)) p.box=Math.min(p.box,2); }   // 書いて（漢字は読みと書きの両方で）正解するまでは「定着」にしない
@@ -526,6 +526,7 @@ function chooseFmt(q, fmts){
   if(fmts.length===1) return fmts[0];
   if(q.type==="kanji"){   // 読みと書きを ごちゃまぜ。まだ正解していない方を出やすく、前回と同じ方は出にくく
     const p=prog(q.id), F=(p&&p.fmt)||{};
+    if(p&&p.forceKaki) return "kaki";                              // おうちの人が❌にした字は、次は必ず「書き」
     const yomiOk=F.yomi===1||F.yomipick===1, kakiOk=F.kaki===1;
     let wk=1, wy=1;
     if(!kakiOk) wk*=1.6; if(!yomiOk) wy*=1.6;
@@ -1128,7 +1129,7 @@ function renderKTestSetup(){
     ${past.length?`<h2>これまでの点数</h2><div class="card"><table>${past.map(r=>`<tr><td>${r.date.slice(5).replace("-","/")}</td><td class="muted">${r.n}問</td><td class="r"><b>${r.score}点</b></td></tr>`).join("")}</table></div>`:""}`;
 }
 function kUnit(enc,on){ const u=decodeURIComponent(enc); sections("漢字").filter(s=>s.unit===u).forEach(s=>KSEL.keys[on?"add":"delete"](s.key)); KSEL.pa=KSEL.pb=undefined; renderKTestSetup(); }
-function kPool(){ return allQ("漢字").filter(q=>KSEL.keys.has(q.secKey)); }
+function kPool(){ const seen=new Set(); return allQ("漢字").filter(q=>KSEL.keys.has(q.secKey) && !seen.has(q.w) && seen.add(q.w)); }   // 2つの単元に同じ言葉があっても1回だけ
 function kCount(P){ return KSEL.n ? Math.min(KSEL.n, P*2) : P; }   // 最大で「ことばの数×2」（読み＋書き）
 /* ページ番号での範囲指定（単元名の「p.5〜8」から読み取る） */
 function secPages(sec){ const m=String(sec).match(/p\.(\d+)(?:〜(\d+))?/); return m?[+m[1], +(m[2]||m[1])]:null; }
@@ -1262,7 +1263,7 @@ function kRetry(){ const wrong=K.list.filter((q,k)=>K.res[k].ok!==1||K.uns[k]); 
    ごほうびパズル（ゆずんゴ／ここんゴ）
    ・12種類のブロックから4つを選び、それがぴったり入る枠をその場で作る（必ず解ける）
    ・今日の学習（ノルマ）を全部終えると、1日1回だけ遊べる
-   ・30秒の砂時計。10秒以内＝赤／15秒＝青／20秒＝緑／30秒＝黄のダイヤ
+   ・45秒の砂時計。15秒以内＝赤／25秒＝青／35秒＝緑／45秒＝黄のダイヤ。ノルマ達成で1日2回
    ============================================================ */
 const PIECES = {
   O4:{c:"#E2352A", cells:[[0,0],[1,0],[0,1],[1,1]]},
@@ -1278,10 +1279,12 @@ const PIECES = {
   P5:{c:"#2C9A45", cells:[[1,0],[2,0],[0,1],[1,1],[2,1]]},
   V3:{c:"#23977A", cells:[[0,0],[0,1],[1,1]]},
 };
-const GEMS = [ {k:"red", t:10, c:"#E8344E", name:"赤"}, {k:"blue", t:15, c:"#3D7BEA", name:"青"}, {k:"green", t:20, c:"#2DB36B", name:"緑"}, {k:"yellow", t:30, c:"#F2C230", name:"黄色"} ];
-const GAME_LIMIT = 30;
-function gameInfo(){ return isKid() ? {name:"ここんゴ", en:"KOKONGO", img:"kokongo.jpg", bg:"#D9533F"} : {name:"ゆずんゴ", en:"YUZUNGO", img:"yuzungo.jpg", bg:"#DE5B47"}; }
+const GEMS = [ {k:"red", t:15, c:"#E8344E", name:"赤"}, {k:"blue", t:25, c:"#3D7BEA", name:"青"}, {k:"green", t:35, c:"#2DB36B", name:"緑"}, {k:"yellow", t:45, c:"#F2C230", name:"黄色"} ];
+const GAME_LIMIT = 45;
+const GAME_PER_DAY = 2;   // ノルマ達成で遊べる回数（1日）
+function gameInfo(){ return isKid() ? {name:"ここんゴ", en:"KOKONGO", img:"kokongo.jpg", bg:"linear-gradient(#E04D3D,#D54236)"} : {name:"ゆずんゴ", en:"YUZUNGO", img:"yuzungo.jpg", bg:"linear-gradient(#E25140,#DA4A3B 55%,#CF4033)"}; }
 function gameData(){ DB.game ||= {gems:{red:0,blue:0,green:0,yellow:0}, last:"", cleared:[], plays:0, cur:null}; DB.game.gems ||= {red:0,blue:0,green:0,yellow:0}; return DB.game; }
+function playsToday(){ const g=gameData(); if(g.day && g.day.date===today()) return g.day.n||0; return g.last===today()?1:0; }   // 旧版（1日1回）の記録は1回とみなす
 function isDebug(){ try{ return localStorage.getItem("manadori:debug")==="1"; }catch(e){ return false; } }
 
 /* ---- 形のあつかい ---- */
@@ -1351,14 +1354,14 @@ function questState(){
 function gameStatus(){
   const g=gameData(), q=questState();
   if(isDebug()) return {can:true, debug:true, q};
-  if(g.last===today() && !g.cur) return {can:false, played:true, q};
+  if(playsToday()>=GAME_PER_DAY && !g.cur) return {can:false, played:true, q};
   return {can:q.done, q};
 }
 
 /* ---- 自動でゲームを出す：その日のノルマを終えた瞬間（完了画面）か、続きがある日にアプリを開いたとき ---- */
 let GRET="#top";          // ゲームが終わったら戻る場所
 const GAUTO={};           // アプリを開いている間に、もう自動で出したか（プロフィールごと）
-function gameDue(){ return questState().done && gameData().last!==today(); }   // デバッグに関係なく、本当の条件
+function gameDue(){ return questState().done && (playsToday()<GAME_PER_DAY || !!gameData().cur); }   // デバッグに関係なく、本当の条件
 function autoGame(ms){
   if(GAUTO[PROF.cur] || !gameDue()) return;
   const h=location.hash||"#top";
@@ -1397,8 +1400,8 @@ function renderGame(){
     return;
   }
   // 遊べる：ロゴがうかびあがってからスタート
-  const gl=document.createElement("div"); gl.className="gintro"; gl.style.background=info.bg;
-  gl.innerHTML=`<div class="gwhat">！？</div><img src="${info.img}" alt="${info.name}" class="glogo"><div class="gintro-gems">${gemShelf(g,false)}</div>`;
+  const gl=document.createElement("div"); gl.className="gintro"; gl.style.backgroundImage=info.bg;
+  gl.innerHTML=`<img src="${info.img}" alt="${info.name}" class="glogo"><div class="gintro-gems">${gemShelf(g,false)}</div>`;
   document.body.appendChild(gl);
   app().innerHTML="";
   setTimeout(()=>{ if(!gl.isConnected||gl.classList.contains("out")) return; gl.classList.add("out"); setTimeout(()=>{ gl.remove(); startPuzzle(); }, 450); }, 4000);
@@ -1436,7 +1439,7 @@ function renderPuzzle(){
   let board=""; P.cells.forEach(([x,y])=>{ board+=`<rect x="${x*cs+1}" y="${y*cs+1}" width="${cs-2}" height="${cs-2}" rx="3" class="gcell"/>`; });
   app().innerHTML=`<div class="top gtop"><button class="back" onclick="gQuit()" aria-label="もどる">✕</button><h1>${esc(gameInfo().name)}${GZ.debug?' <span class="pill star">🛠</span>':""}</h1>
       ${GZ.giveup?"":`<button class="ggive" id="ggive" onclick="gGiveUp()">🏳️ ギブアップ</button>`}
-      <div class="hourglass" id="hg">${hourglassSVG(0)}<div class="hgt"><b id="hgs">30</b><span id="hgm"></span></div></div></div>
+      <div class="hourglass" id="hg">${hourglassSVG(0)}<div class="hgt"><b id="hgs">${GAME_LIMIT}</b><span id="hgm"></span></div></div></div>
     <div class="glayer" id="glayer" style="height:${ty+2*slotH+8}px">
       <div class="gboard" style="left:${bx-8}px;top:${by-8}px;width:${bw+16}px;height:${bh+16}px"></div>
       <svg class="gframe" style="left:${bx}px;top:${by}px" width="${bw}" height="${bh}">${board}<g class="gghost" id="gghost"></g></svg>
@@ -1519,7 +1522,7 @@ function gTick(){
   $("#hg").innerHTML=hourglassSVG(Math.min(1,t/GAME_LIMIT))+`<div class="hgt"><b>${left>0?Math.ceil(left):"0"}</b><span>${g?gemSVG(g.c,16):"⏰"}</span></div>`;
   $("#hg").classList.toggle("over", t>GAME_LIMIT);
 }
-function hourglassSVG(f){   // f：0（はじめ）→1（30秒）
+function hourglassSVG(f){   // f：0（はじめ）→1（制限時間）
   const top=1-f, bot=f;
   return `<svg width="34" height="44" viewBox="0 0 34 44"><path d="M4 2h26M4 42h26" stroke="#7A4B2A" stroke-width="3" stroke-linecap="round"/>
     <path d="M7 4c0 10 9 13 9 18s-9 8-9 18h20c0-10-9-13-9-18s9-8 9-18z" fill="rgba(255,255,255,.75)" stroke="#7A4B2A" stroke-width="1.6"/>
@@ -1561,15 +1564,17 @@ function gCheck(){
   const t=gElapsed(), gem=GZ.giveup?null:gemFor(t), g=gameData();
   if(!GZ.debug){
     if(gem) g.gems[gem.k]=(g.gems[gem.k]||0)+1;
-    g.last=today(); g.plays=(g.plays||0)+1; g.cleared=(g.cleared||[]).concat(GZ.puz.sig).slice(-500); g.cur=null;
+    const n=playsToday()+1; g.day={date:today(), n}; g.last=today(); g.plays=(g.plays||0)+1; g.cleared=(g.cleared||[]).concat(GZ.puz.sig).slice(-500); g.cur=null;
     (g.log ||= []).push({date:today(), sec:Math.round(t*10)/10, gem:gem?gem.k:"", giveup:!!GZ.giveup}); save();
   }
   const ov=document.createElement("div"); ov.className="gclear";
   ov.innerHTML=`<div class="gcbox"><div class="gctitle">クリア！</div>${GZ.giveup?`<div class="gctime">🏳️ 答えを見てクリア</div>`:`<div class="gctime">${(Math.round(t*10)/10).toFixed(1)}秒</div>`}
-    ${GZ.giveup?`<p><b>ギブアップしたので、ダイヤはなし</b><br><span class="muted">つぎは 自分の力で ぴったりを めざそう！</span></p>`:gem?`<div class="gcgem">${gemSVG(gem.c,96)}</div><p><b>${gem.name}のダイヤ ゲット！</b></p>`:`<p><b>30秒をこえたので、ダイヤはなし…</b><br><span class="muted">明日は30秒以内をめざそう！</span></p>`}
+    ${GZ.giveup?`<p><b>ギブアップしたので、ダイヤはなし</b><br><span class="muted">つぎは 自分の力で ぴったりを めざそう！</span></p>`:gem?`<div class="gcgem">${gemSVG(gem.c,96)}</div><p><b>${gem.name}のダイヤ ゲット！</b></p>`:`<p><b>${GAME_LIMIT}秒をこえたので、ダイヤはなし…</b><br><span class="muted">つぎは${GAME_LIMIT}秒以内をめざそう！</span></p>`}
     ${GZ.debug?`<p class="muted">🛠 デバッグモード：ダイヤは記録されません</p>`:""}
     ${gemShelf(gameData(),false)}
-    ${GZ.debug?`<button class="btn" onclick="gNext()">🛠 次のゲームへ ⏭</button><div class="spacer"></div>`:""}
+    ${GZ.debug?`<button class="btn" onclick="gNext()">🛠 次のゲームへ ⏭</button><div class="spacer"></div>`
+      :playsToday()<GAME_PER_DAY?`<button class="btn" style="background:#E9B52C;box-shadow:0 4px 0 #C3921A" onclick="gNext()">🎮 つぎのパズルへ（今日あと${GAME_PER_DAY-playsToday()}回）</button><div class="spacer"></div>`
+      :`<p class="muted">今日の ${gameInfo().name} はここまで。また明日！</p>`}
     <button class="btn ${GZ.debug?"ghost":""}" onclick="this.closest('.gclear').remove();GZ=null;go(GRET||'#top')">もどる</button></div>`;
   document.body.appendChild(ov);
   if(gem) for(let i=0;i<18;i++){ const s=document.createElement("span"); s.className="gconf"; s.style.left=Math.random()*100+"%"; s.style.animationDelay=(Math.random()*.6)+"s";
@@ -1630,7 +1635,7 @@ async function momMark(i, v){
   const r=MOMLIST[i]; if(!r) return;
   r.mom=v; r.momAt=Date.now(); await chkPut(r);
   if(v==="ng"){   // ちがっていたら、明日もう一度「書き」で出す
-    const p=DB.prog[r.qid]; if(p){ p.box=1; p.due=addDays(today(),1); p.fmt=p.fmt||{}; p.fmt.kaki=0; p.lastFmt="yomi"; p.hist=(p.hist||"").slice(0,-1)+"0"; save(); }
+    const p=DB.prog[r.qid]; if(p){ p.box=1; p.due=addDays(today(),1); p.fmt=p.fmt||{}; p.fmt.kaki=0; p.lastFmt="yomi"; p.forceKaki=1; p.hist=(p.hist||"").slice(0,-1)+"0"; save(); }
   }
   await refreshPending(); renderMom();
 }
