@@ -3,7 +3,7 @@
   "short_name": "まなドリ",
   "description": "教科書から作った問題を、間隔反復と模擬テストで定着させる学習アプリ",
   "lang": "ja",
-  "id": "/manadori/?app=manadori2",
+  "id": "/manadori",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
