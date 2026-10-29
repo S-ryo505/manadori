@@ -288,12 +288,15 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.7.4";
+const APP_VER = "1.8.0";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
 function loadProfiles(){ try{ const r=localStorage.getItem(PKEY); if(r){ const d=JSON.parse(r); PROF=Object.assign(PROF,d); } }catch(e){} }
-function saveProfiles(){ try{ localStorage.setItem(PKEY, JSON.stringify(PROF)); }catch(e){} }
+function saveProfiles(noSync){
+  const h=hashStr(JSON.stringify(PROF.list.map(p=>({id:p.id,name:p.name,level:p.level,icon:p.icon})))+(PROF.momEmail||""));
+  if(PROF._h!=null && h!==PROF._h){ PROF.u=Date.now(); if(!noSync) syncSoon(); } PROF._h=h;
+  try{ localStorage.setItem(PKEY, JSON.stringify(PROF)); }catch(e){} }
 function curProf(){ return PROF.list.find(x=>x.id===PROF.cur)||PROF.list[0]; }
 function profKey(id){ return id==="chu" ? "manadori:v1" : "manadori:p:"+id; }
 function isKid(){ return curProf().level==="小学"; }
@@ -313,8 +316,8 @@ const MIXV = {few:.3, mid:.5, many:.65};
 const MIX_LABEL = {few:"少なめ", mid:"ふつう", many:"多め"};
 
 /* ---------- 学習記録（localStorage） ---------- */
-function defaults(){
-  const kid = (typeof PROF!=="undefined") && isKid();
+function defaults(pid){
+  const kid = (typeof PROF!=="undefined") && (pid ? ((PROF.list.find(p=>p.id===pid)||{}).level==="小学") : isKid());
   return { prog:{}, days:{}, tests:[], ui:{subj:""},
     settings:{ examDate:"", newPerDay: kid?10:15, sessionMax: kid?20:30, answerMode:"type", requireWrite:true, mix:{社会:"many", 英語:"mid", 理科:"mid"} } };
 }
@@ -335,8 +338,14 @@ function load(){
       delete DB.settings.typeTerms;
     }
   }catch(e){ console.warn(e); }
+  ensureSync(DB);
 }
-function save(){ try{ localStorage.setItem(profKey(PROF.cur), JSON.stringify(DB)); }catch(e){ toast("記録を保存できませんでした"); } }
+function save(noSync){
+  recomputeDays(DB);
+  const h=hashStr(JSON.stringify(DB.settings)); if(DB._setH!=null && h!==DB._setH) DB.settingsU=Date.now(); DB._setH=h;   // 設定を変えた時刻（同期用）
+  try{ localStorage.setItem(profKey(PROF.cur), JSON.stringify(DB)); }catch(e){ toast("記録を保存できませんでした"); }
+  if(!noSync) syncSoon();
+}
 
 /* ---------- 問題データ（IndexedDB） ---------- */
 let SETS = {}, idb = null;
@@ -345,9 +354,9 @@ function idbOpen(){ return new Promise(res=>{ try{ const r=indexedDB.open("manad
     if(!db.objectStoreNames.contains("checks")) db.createObjectStore("checks",{keyPath:"k", autoIncrement:true}); };
   r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); r.onblocked=()=>res(null); }catch(e){ res(null); } }); }
 /* 手書きの答え（おうちの人チェック用） */
-function chkAdd(rec){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(null); const tx=idb.transaction("checks","readwrite"); const rq=tx.objectStore("checks").add(rec);
+function chkAdd(rec){ rec.id ||= newId(); syncSoon(); return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(null); const tx=idb.transaction("checks","readwrite"); const rq=tx.objectStore("checks").add(rec);
   rq.onsuccess=()=>res(rq.result); tx.onerror=()=>res(null); }); }
-function chkPut(rec){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").put(rec); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
+function chkPut(rec){ syncSoon(); return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").put(rec); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
 function chkAll(){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res([]); const out=[], c=idb.transaction("checks","readonly").objectStore("checks").openCursor();
   c.onsuccess=()=>{ const cur=c.result; if(cur){ out.push(cur.value); cur.continue(); } else res(out); }; c.onerror=()=>res(out); }); }
 function chkDel(k){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").delete(k); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
@@ -406,7 +415,7 @@ function missingImg(setId){ const s=SETS[setId]; return !!s && s.questions.some(
 function imgOf(q){ const s=SETS[q.setId]; return q.img && s && s.images ? s.images[q.img] : null; }
 function prog(id){ return DB.prog[id]; }
 function boxOf(id){ const p=DB.prog[id]; return p?p.box:0; }
-function dayRec(){ const t=today(); const d=DB.days[t]||(DB.days[t]={n:0,c:0}); d.subj ||= {}; return d; }
+function dayRec(){ const t=today(); DB.dd ||= {}; const m=DB.dd[DEV] ||= {}; const d=m[t] ||= {n:0,c:0,subj:{}}; d.subj ||= {}; d.u=Date.now(); return d; }   // この端末の分。合計は DB.days
 
 /* 採点 → 次の出題日。ex.unsure＝わからない／自信なし（明日もう1回）、ex.fmt＝出題形式 */
 function needsWrite(q){ return DB.settings.requireWrite!==false && (q.fmts||formatsOf(q)).includes("write"); }
@@ -426,7 +435,7 @@ function grade(q, ok, soft, ex){
   let due=addDays(t, (unsure||(ok&&soft)) ? 1 : INTERVALS[p.box]);
   const e=DB.settings.examDate;
   if(e && e>t){ const lim=addDays(e,-1); if(due>lim) due = lim>addDays(t,1)?lim:addDays(t,1); }
-  p.due=due; p.last=t; p.hist=(p.hist+(good?"1":"0")).slice(-10); DB.prog[q.id]=p;
+  p.due=due; p.last=t; p.u=Date.now(); p.hist=(p.hist+(good?"1":"0")).slice(-10); DB.prog[q.id]=p;
   const d=dayRec(); d.n++; if(good) d.c++;
   const s=d.subj[q.subject]||(d.subj[q.subject]={n:0,c:0,nw:0}); s.n++; if(good) s.c++;
   save();
@@ -860,7 +869,7 @@ function renderTop(){
     : left===0&&td.n ? "今日の分はぜんぶ終わり！すごい！"
     : dte!==null&&dte>=0&&dte<=7 ? `テストまであと${dte}日。苦手をつぶそう！` : "今日もいっしょにがんばろう！";
   app().innerHTML=`
-    <div class="top"><h1>まなドリ</h1><button class="whochip" onclick="go('#who')">${curProf().icon} ${esc(curProf().name)} ▾</button><button class="icon" onclick="go('#settings')" aria-label="設定">⚙️</button></div>
+    <div class="top"><h1>まなドリ</h1><button class="whochip" onclick="go('#who')">${curProf().icon} ${esc(curProf().name)} ▾</button>${syncBadge()}<button class="icon" onclick="go('#settings')" aria-label="設定">⚙️</button></div>
     <div class="greet"><span class="bob">${doriSVG(left===0&&td.n?"cheer":"normal",84)}</span>
       <div class="bubble">${greeting()}<br><span class="muted">${msg}</span></div></div>
     <div class="count">
@@ -1254,7 +1263,7 @@ async function finishKTest(){
   for(let k=0;k<K.list.length;k++){ const q=K.list[k], r=K.res[k]; if(q.kmode!=="kaki"||!r.img) continue;
     await chkAdd({prof:PROF.cur, date:today(), ts:Date.now()+k, qid:q.id, setId:q.setId, w:q.w, r:q.r, s:q.s||"", img:r.img, self:K.uns[k]?"unsure":(r.ok===1?"ok":"ng"), mom:null, test:true}); }
   const bySec={}; K.list.forEach((q,k)=>{ const s=bySec[q.secKey]||(bySec[q.secKey]=[0,0]); s[0]+=K.res[k].ok||0; s[1]++; });
-  DB.tests.push({date:today(), subject:"漢字", n:K.list.length, score:kScore(), mins:Math.round(K.used/60000), bySec, units:"漢字テスト"});
+  DB.tests.push({id:newId(), u:Date.now(), date:today(), subject:"漢字", n:K.list.length, score:kScore(), mins:Math.round(K.used/60000), bySec, units:"漢字テスト"});
   save(); await refreshPending(); renderKResult(); window.scrollTo(0,0); sparkle();
 }
 function kRetry(){ const wrong=K.list.filter((q,k)=>K.res[k].ok!==1||K.uns[k]); K=null; startKTest(wrong); }
@@ -1283,8 +1292,8 @@ const GEMS = [ {k:"red", t:15, c:"#E8344E", name:"赤"}, {k:"blue", t:25, c:"#3D
 const GAME_LIMIT = 45;
 const GAME_PER_DAY = 2;   // ノルマ達成で遊べる回数（1日）
 function gameInfo(){ return isKid() ? {name:"ここんゴ", en:"KOKONGO", img:"kokongo.jpg", bg:"linear-gradient(#E04D3D,#D54236)"} : {name:"ゆずんゴ", en:"YUZUNGO", img:"yuzungo.jpg", bg:"linear-gradient(#E25140,#DA4A3B 55%,#CF4033)"}; }
-function gameData(){ DB.game ||= {gems:{red:0,blue:0,green:0,yellow:0}, last:"", cleared:[], plays:0, cur:null}; DB.game.gems ||= {red:0,blue:0,green:0,yellow:0}; return DB.game; }
-function playsToday(){ const g=gameData(); if(g.day && g.day.date===today()) return g.day.n||0; return g.last===today()?1:0; }   // 旧版（1日1回）の記録は1回とみなす
+function gameData(){ DB.game ||= {gems:{red:0,blue:0,green:0,yellow:0}, last:"", cleared:[], plays:0, cur:null, log:[]}; DB.game.gems ||= {red:0,blue:0,green:0,yellow:0}; DB.game.log ||= []; DB.game.cleared ||= []; return DB.game; }
+function playsToday(){ const g=gameData(), t=today(), n=(g.log||[]).filter(e=>e.date===t).length; return n || (g.last===t?1:0); }   // 2台で遊んでも合計で数える   // 旧版（1日1回）の記録は1回とみなす
 function isDebug(){ try{ return localStorage.getItem("manadori:debug")==="1"; }catch(e){ return false; } }
 
 /* ---- 形のあつかい ---- */
@@ -1565,7 +1574,7 @@ function gCheck(){
   if(!GZ.debug){
     if(gem) g.gems[gem.k]=(g.gems[gem.k]||0)+1;
     const n=playsToday()+1; g.day={date:today(), n}; g.last=today(); g.plays=(g.plays||0)+1; g.cleared=(g.cleared||[]).concat(GZ.puz.sig).slice(-500); g.cur=null;
-    (g.log ||= []).push({date:today(), sec:Math.round(t*10)/10, gem:gem?gem.k:"", giveup:!!GZ.giveup}); save();
+    (g.log ||= []).push({id:newId(), t:Date.now(), date:today(), sec:Math.round(t*10)/10, gem:gem?gem.k:"", giveup:!!GZ.giveup}); save();
   }
   const ov=document.createElement("div"); ov.className="gclear";
   ov.innerHTML=`<div class="gcbox"><div class="gctitle">クリア！</div>${GZ.giveup?`<div class="gctime">🏳️ 答えを見てクリア</div>`:`<div class="gctime">${(Math.round(t*10)/10).toFixed(1)}秒</div>`}
@@ -1635,7 +1644,7 @@ async function momMark(i, v){
   const r=MOMLIST[i]; if(!r) return;
   r.mom=v; r.momAt=Date.now(); await chkPut(r);
   if(v==="ng"){   // ちがっていたら、明日もう一度「書き」で出す
-    const p=DB.prog[r.qid]; if(p){ p.box=1; p.due=addDays(today(),1); p.fmt=p.fmt||{}; p.fmt.kaki=0; p.lastFmt="yomi"; p.forceKaki=1; p.hist=(p.hist||"").slice(0,-1)+"0"; save(); }
+    const p=DB.prog[r.qid]; if(p){ p.box=1; p.due=addDays(today(),1); p.fmt=p.fmt||{}; p.fmt.kaki=0; p.lastFmt="yomi"; p.forceKaki=1; p.u=Date.now(); p.hist=(p.hist||"").slice(0,-1)+"0"; save(); }
   }
   await refreshPending(); renderMom();
 }
@@ -1821,7 +1830,8 @@ function submitTest(timeUp){
 function testScore(){ return Math.round(test.res.reduce((s,r)=>s+r.ok,0)/test.list.length*100); }
 function saveTest(){
   const bySec={}; test.list.forEach((q,k)=>{ const s=bySec[q.secKey]||(bySec[q.secKey]=[0,0]); s[0]+=test.res[k].ok; s[1]++; });
-  const rec={date:today(), subject:SUBJ, n:test.list.length, score:testScore(), mins:Math.round(test.used/60000), bySec, units:[...new Set(test.list.map(q=>q.unit))].join("、")};
+  test.id ||= newId();
+  const rec={id:test.id, u:Date.now(), date:today(), subject:SUBJ, n:test.list.length, score:testScore(), mins:Math.round(test.used/60000), bySec, units:[...new Set(test.list.map(q=>q.unit))].join("、")};
   if(test.saved===false){ DB.tests.push(rec); test.saved=DB.tests.length-1; } else DB.tests[test.saved]=rec; save();
 }
 function wCheck(k,p,v){ const r=test.res[k]; r.checks[p]=v; r.ok=r.checks.filter(Boolean).length/r.checks.length; saveTest(); const el=$("#sc"); if(el) el.textContent=testScore(); }
@@ -1923,6 +1933,7 @@ function renderSettings(){
       <div class="seg">${[5,10,15,20,30].map(n=>`<button class="${S.newPerDay===n?"on":""}" onclick="DB.settings.newPerDay=${n};save();renderSettings()">${n}問</button>`).join("")}</div>
       <div class="spacer"></div><b>1回の最大問題数</b>
       <div class="seg">${[20,30,40,60].map(n=>`<button class="${S.sessionMax===n?"on":""}" onclick="DB.settings.sessionMax=${n};save();renderSettings()">${n}問</button>`).join("")}</div></div>
+    ${syncCardHTML()}
     <h2>記録のバックアップ</h2>
     <div class="card"><p class="muted" style="margin-top:0">スマホの「サイトのデータを削除」をすると記録が消えます。ときどき書き出しておくと安心です。</p>
       <button class="btn sub" onclick="exportBackup()">バックアップを書き出す</button><div class="spacer"></div>
@@ -1930,7 +1941,7 @@ function renderSettings(){
       <div class="spacer"></div><button class="btn ghost" style="color:var(--ng)" onclick="resetProgress()">学習記録だけリセット</button></div>
     ${isDebug()?`<h2>🛠 デバッグ</h2><div class="card"><button class="btn" onclick="GRET='#settings';go('#game')">🎮 ${esc(gameInfo().name)}をためす</button>
       <p class="muted" style="margin-bottom:0">デバッグ中はノルマなしで何回でも遊べます（ダイヤは記録されません）。このボタンはデバッグ中だけ表示されます。</p></div>`:""}
-    <p class="muted" style="text-align:center;user-select:none" onclick="dbgTap()">まなドリ v${APP_VER}${isDebug()?'<span class="dbgbadge">🛠 デバッグ</span>':""}　データはこの端末の中にだけ保存されます</p>`;
+    <p class="muted" style="text-align:center;user-select:none" onclick="dbgTap()">まなドリ v${APP_VER}${isDebug()?'<span class="dbgbadge">🛠 デバッグ</span>':""}　${syncOn()?"記録はこの端末と、つないだGoogleドライブに保存されます":"データはこの端末の中にだけ保存されます"}</p>`;
 }
 function importFile(file, kind){ if(!file) return; const r=new FileReader(); r.onload=()=>importText(String(r.result),kind); r.onerror=()=>toast("ファイルを読めませんでした"); r.readAsText(file,"utf-8"); }
 async function putSet(id,s){ SETS[id]=s; delete POOL_CACHE[id]; const ok=await idbPut(id,s); if(!ok) toast("問題データを端末に保存できませんでした"); return ok; }
@@ -1939,7 +1950,7 @@ async function importText(text, kind){
   if(d && d.format==="manadori-backup" && d.db){
     if(!confirm(kind==="backup"?"今の問題と記録を、バックアップの内容に置きかえますか？":"これはバックアップファイルです。今の記録をすべて置きかえますか？")) return;
     const sets=d.sets||d.db.sets||{}; delete d.db.sets;
-    const def=defaults(); DB=Object.assign(def,d.db); DB.settings=Object.assign(defaults().settings,d.db.settings||{}); DB.settings.mix=Object.assign(defaults().settings.mix,(d.db.settings||{}).mix||{}); save();
+    const def=defaults(); DB=Object.assign(def,d.db); DB.settings=Object.assign(defaults().settings,d.db.settings||{}); DB.settings.mix=Object.assign(defaults().settings.mix,(d.db.settings||{}).mix||{}); ensureSync(DB); save();
     for(const id of Object.keys(SETS)) await idbDel(id); SETS={}; for(const [id,s] of Object.entries(sets)) await putSet(id,s);
     toast("バックアップから戻しました"); renderSettings(); return;
   }
@@ -1947,21 +1958,282 @@ async function importText(text, kind){
   if(!d || d.format!=="manadori-v1" || !Array.isArray(d.questions) || !d.set){ toast("まなドリ用の問題データではありません"); return; }
   if(d.questions.find(q=>!q.id||!q.type)){ toast("問題データにこわれた部分があります"); return; }
   const isNew=!SETS[d.set];
-  await putSet(d.set,{subject:d.subject||"", unit:d.unit||d.set, level:d.level||"中学", source:d.source||"", version:d.version||1, lang:d.lang||"", images:d.images||null, audio:d.audio||null, strokes:d.strokes||null, credits:d.credits||"", questions:d.questions});
+  delete SYNC.del[d.set]; saveSync();
+  await putSet(d.set,{u:Date.now(), subject:d.subject||"", unit:d.unit||d.set, level:d.level||"中学", source:d.source||"", version:d.version||1, lang:d.lang||"", images:d.images||null, audio:d.audio||null, strokes:d.strokes||null, credits:d.credits||"", questions:d.questions});
   toast(`${d.subject}・${d.unit}：${d.questions.length}問を${isNew?"読み込み":"更新し"}ました`); renderSettings();
 }
 async function delSet(id){ if(!confirm("この単元の問題を削除しますか？（学習記録も消えます）")) return;
-  const s=SETS[id]; if(s) s.questions.forEach(q=>delete DB.prog[q.id]); delete SETS[id]; await idbDel(id); save(); renderSettings(); }
+  const s=SETS[id]; if(s) s.questions.forEach(q=>delete DB.prog[q.id]); delete SETS[id]; await idbDel(id); SYNC.del[id]=Date.now(); saveSync(); save(); renderSettings(); }
 function exportBackup(){
   const blob=new Blob([JSON.stringify({format:"manadori-backup", ver:APP_VER, saved:new Date().toISOString(), db:DB, sets:SETS})],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`manadori-backup-${today()}.json`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); toast("書き出しました（ダウンロードフォルダ）");
 }
-function resetProgress(){ if(!confirm("学習記録と模擬テストの記録を消します。問題データは残ります。よろしいですか？")) return; DB.prog={}; DB.days={}; DB.tests=[]; save(); toast("記録をリセットしました"); renderSettings(); }
+function resetProgress(){ if(!confirm("学習記録と模擬テストの記録を消します。問題データは残ります。よろしいですか？")) return; DB.prog={}; DB.days={}; DB.dd={}; DB.tests=[]; DB.epoch=Date.now(); save(); toast("記録をリセットしました"); renderSettings(); }
+
+/* ============================================================
+   端末どうしの同期（Googleドライブ ＋ Apps Script）
+   ・サーバーは「版番号つきの保存」だけ。合体（マージ）はアプリ側で行う
+   ・ファイル：meta（プロフィール名・メール）、db-<人>（学習記録・ゲーム）、
+               chk-<人>-<日付>（手書きの答え）、sets（問題データの目次）、set-<id>（問題データ）
+   ============================================================ */
+const SYNC_KEY="manadori:sync";
+const DEV=(()=>{ try{ let d=localStorage.getItem("manadori:dev"); if(!d){ d="d"+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4); localStorage.setItem("manadori:dev",d); } return d; }catch(e){ return "dx"; } })();
+let SYNC={url:"", key:"", revs:{}, h:{}, del:{}, last:0, err:"", ok:0};
+let SYNCING=null, SYNC_AGAIN=false, SYNC_TM=null, SYNC_STATE="";
+function loadSync(){ try{ const r=localStorage.getItem(SYNC_KEY); if(r) SYNC=Object.assign(SYNC, JSON.parse(r)); }catch(e){} SYNC.revs||={}; SYNC.h||={}; SYNC.del||={}; }
+function saveSync(){ try{ localStorage.setItem(SYNC_KEY, JSON.stringify(SYNC)); }catch(e){} }
+function syncOn(){ return !!(SYNC.url && SYNC.key); }
+function newId(){ return DEV+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,6); }
+function setName(id){ return "set-"+String(id).replace(/[^A-Za-z0-9_.\-]/g,c=>"_"+c.charCodeAt(0).toString(16)); }
+function hashStr(s){ let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); } return (h>>>0).toString(36)+":"+s.length; }
+
+/* ---- 記録の形をそろえる（古い版の記録もここで変換） ---- */
+function recomputeDays(d){
+  const out={};
+  for(const days of Object.values(d.dd||{})) for(const [date,r] of Object.entries(days)){
+    const o=out[date] ||= {n:0,c:0,subj:{}}; o.n+=r.n||0; o.c+=r.c||0;
+    for(const [s,x] of Object.entries(r.subj||{})){ const y=o.subj[s] ||= {n:0,c:0,nw:0}; y.n+=x.n||0; y.c+=x.c||0; y.nw+=x.nw||0; }
+  }
+  d.days=out; return out;
+}
+function gameRecount(g){
+  const c={red:0,blue:0,green:0,yellow:0}; (g.log||[]).forEach(e=>{ if(e.gem && c[e.gem]!=null) c[e.gem]++; });
+  g.gems=c; g.plays=(g.log||[]).length; g.last=(g.log||[]).reduce((m,e)=>e.date>m?e.date:m, g.last||"");
+  const t=today(); g.day={date:t, n:(g.log||[]).filter(e=>e.date===t).length};
+}
+function ensureSync(d){
+  if(!d.dd){ d.dd={}; if(d.days && Object.keys(d.days).length) d.dd[DEV]=JSON.parse(JSON.stringify(d.days)); }
+  (d.tests||[]).forEach(t=>{ if(!t.id){ t.id="L"+hashStr(JSON.stringify([t.date,t.subject,t.n,t.score,t.mins,t.units])); t.u=t.u||1; } });
+  if(d.game){ const g=d.game; g.log ||= []; g.cleared ||= [];
+    g.log.forEach((e,i)=>{ if(!e.id) e.id="L"+hashStr(JSON.stringify([e.date,e.sec,e.gem,!!e.giveup,i])); });
+    // ログより多いダイヤ（とても古い版）は、ログを足してそろえる
+    const c={red:0,blue:0,green:0,yellow:0}; g.log.forEach(e=>{ if(e.gem&&c[e.gem]!=null) c[e.gem]++; });
+    for(const k of Object.keys(c)){ for(let i=c[k]; i<((g.gems||{})[k]||0); i++) g.log.push({id:"G"+k+i, date:g.last||"2000-01-01", sec:0, gem:k, legacy:true}); }
+    gameRecount(g); }
+  if(d._setH==null) d._setH=hashStr(JSON.stringify(d.settings||{}));
+  recomputeDays(d);
+  return d;
+}
+/* 同期する部分だけ（画面の状態などは端末ごと） */
+function dbPart(d){
+  const g=d.game||{};
+  return {v:1, epoch:d.epoch||0, prog:d.prog||{}, dd:d.dd||{}, tests:d.tests||[], settings:d.settings||{}, settingsU:d.settingsU||0,
+    game:{log:g.log||[], cleared:g.cleared||[], cur:g.cur||null}};
+}
+function dbIsEmpty(p){ return !Object.keys(p.prog).length && !Object.keys(p.dd).length && !p.tests.length && !p.game.log.length && !p.game.cur && !p.settingsU && !p.epoch; }
+function newerProg(p,q){ const a=p.u||0, b=q.u||0; return a!==b ? a>b : (p.n||0)>(q.n||0); }
+function mergeGame(a,b){
+  const L={}; [a,b].forEach(g=>{ if(g) (g.log||[]).forEach(e=>{ if(!L[e.id]) L[e.id]=e; }); });
+  const log=Object.values(L).sort((x,y)=>(x.date||"").localeCompare(y.date||"")||(x.t||0)-(y.t||0));
+  const cleared=[...new Set([...((a&&a.cleared)||[]),...((b&&b.cleared)||[])])].slice(-500);
+  const cs=[a&&a.cur,b&&b.cur].filter(c=>c&&c.puz&&!cleared.includes(c.puz.sig));
+  let cur=null;
+  if(cs.length===1) cur=cs[0];
+  else if(cs.length===2) cur = cs[0].puz.sig===cs[1].puz.sig ? Object.assign({},cs[0],{giveup:!!(cs[0].giveup||cs[1].giveup), start:Math.min(cs[0].start,cs[1].start)})
+                                                       : (cs[0].start<=cs[1].start?cs[0]:cs[1]);   // ちがうパズルなら、先に始めた方を続ける
+  return {log, cleared, cur};
+}
+function mergeDB(a,b){   // a：この端末、b：ドライブ
+  const ea=a.epoch||0, eb=b.epoch||0, srcs=[ea>=eb?a:null, eb>=ea?b:null].filter(Boolean);   // 「記録リセット」した方が新しければ、それより前の記録は使わない
+  const o={v:1, epoch:Math.max(ea,eb), prog:{}, dd:{}, tests:[]};
+  for(const s of srcs) for(const [id,p] of Object.entries(s.prog||{})){ const q=o.prog[id]; if(!q||newerProg(p,q)) o.prog[id]=p; }
+  for(const s of srcs) for(const [dev,days] of Object.entries(s.dd||{})){ const m=o.dd[dev] ||= {};
+    for(const [dt,r] of Object.entries(days)){ const q=m[dt]; if(!q || (r.u||0)>(q.u||0) || ((r.u||0)===(q.u||0)&&(r.n||0)>(q.n||0))) m[dt]=r; } }
+  const T={}; for(const s of srcs) for(const t of s.tests||[]){ const q=T[t.id]; if(!q||(t.u||0)>(q.u||0)) T[t.id]=t; }
+  o.tests=Object.values(T).sort((x,y)=>(x.date||"").localeCompare(y.date||"")||(x.u||0)-(y.u||0));
+  const sb=(b.settingsU||0)>=(a.settingsU||0) && b.settings && Object.keys(b.settings).length; o.settings=sb?b.settings:a.settings; o.settingsU=Math.max(a.settingsU||0,b.settingsU||0);
+  o.game=mergeGame(a.game,b.game);
+  return o;
+}
+function dbApply(d,m){
+  d.epoch=m.epoch; d.prog=m.prog; d.dd=m.dd; d.tests=m.tests; d.settingsU=m.settingsU;
+  if(m.settings){ const def=defaults().settings; d.settings=Object.assign(def, m.settings); d.settings.mix=Object.assign(defaults().settings.mix, m.settings.mix||{}); }
+  d._setH=hashStr(JSON.stringify(d.settings));
+  const g=d.game || (d.game={gems:{red:0,blue:0,green:0,yellow:0}, last:"", cleared:[], plays:0, cur:null});
+  g.log=m.game.log; g.cleared=m.game.cleared; g.cur=m.game.cur; gameRecount(g);
+  recomputeDays(d);
+}
+/* ---- 手書きの答え：日ごと ---- */
+function chkPart(items){ return {v:1, items:items.map(r=>{ const o=Object.assign({},r); delete o.k; return o; }).sort((x,y)=>(x.ts||0)-(y.ts||0)||String(x.id).localeCompare(String(y.id)))}; }
+function mergeChk(a,b){ const M={}; for(const r of a) M[r.id]=r; for(const r of b){ const q=M[r.id]; if(!q || (r.momAt||0)>(q.momAt||0)) M[r.id]=r; } return Object.values(M); }
+/* ---- プロフィール名・メール ---- */
+function metaPart(){ return {v:1, u:PROF.u||0, momEmail:PROF.momEmail||"", list:PROF.list.map(p=>({id:p.id,name:p.name,level:p.level,icon:p.icon}))}; }
+
+/* ---- サーバーとの通信 ---- */
+async function api(body, ms){
+  const ac=new AbortController(), t=setTimeout(()=>ac.abort(), ms||30000);
+  try{
+    const r=await fetch(SYNC.url,{method:"POST", body:JSON.stringify(Object.assign({key:SYNC.key, v:1},body)), headers:{"Content-Type":"text/plain;charset=utf-8"}, signal:ac.signal, redirect:"follow"});
+    const txt=await r.text(); let j;
+    try{ j=JSON.parse(txt); }catch(e){ throw new Error(/<html|<!DOCTYPE/i.test(txt)?"URLがちがうか、デプロイの「アクセスできるユーザー」が「全員」になっていません":"サーバーの返事が読めません（"+r.status+"）"); }
+    if(j.error) throw new Error(j.error==="key"?"合言葉がちがいます":j.error==="setup"?"Apps Scriptで setup を実行していません":j.error);
+    return j;
+  }catch(e){ if(e.name==="AbortError") throw new Error("時間切れ（電波を確認してください）"); if(e instanceof TypeError) throw new Error("つながりません（電波・URLを確認してください）"); throw e; }
+  finally{ clearTimeout(t); }
+}
+/* 1ファイルを「読む→合体→書く」。conflict のときは合体し直してもう一度 */
+async function syncFile(name, R, getLocal, merge, apply, opt){
+  opt=opt||{};
+  let rRev=R[name]||0, rData=null, rHash=SYNC.h[name];
+  if(rRev && rRev!==SYNC.revs[name]){
+    const f=opt.pre || (await api({op:"get", names:[name]}, opt.ms)).files[name]; rRev=f.rev; rData=f.data;
+    if(rData!=null){ rHash=hashStr(rData); await apply(merge(await getLocal(), JSON.parse(rData))); }
+  }else if(!rRev){ rHash=null; }
+  for(let tries=0; tries<4; tries++){
+    const local=await getLocal(); if(local==null) break;
+    const s=JSON.stringify(local), h=hashStr(s);
+    if(h===rHash){ SYNC.revs[name]=rRev; SYNC.h[name]=h; return false; }
+    if(!rRev && opt.skipEmpty && opt.skipEmpty(local)) return false;
+    const res=await api({op:"put", name, base:rRev, data:s}, opt.ms||60000);
+    if(res.ok){ SYNC.revs[name]=res.rev; SYNC.h[name]=h; return true; }
+    if(res.conflict){ rRev=res.rev; rHash=res.data!=null?hashStr(res.data):null; if(res.data!=null) await apply(merge(await getLocal(), JSON.parse(res.data))); continue; }
+    throw new Error("保存できませんでした");
+  }
+  return false;
+}
+function profRaw(pid){ try{ const r=localStorage.getItem(profKey(pid)); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function profObj(pid){
+  if(pid===PROF.cur) return DB;
+  const d=Object.assign(defaults(), profRaw(pid)||{}); return ensureSync(d);
+}
+function profStore(pid,d){ if(pid===PROF.cur){ save(true); return; } try{ localStorage.setItem(profKey(pid), JSON.stringify(d)); }catch(e){} }
+
+async function syncNow(opt){
+  opt=opt||{};
+  if(!syncOn()) return false;
+  if(SYNCING){ SYNC_AGAIN=true; return SYNCING; }
+  SYNCING=(async()=>{
+    let changed=false, chkChanged=false; SYNC_STATE="busy"; syncBadgeUpdate();
+    try{
+      save(true);
+      const R=(await api({op:"list"})).revs||{};
+      // プロフィール名・メール
+      await syncFile("meta", R, ()=>metaPart(), (l,r)=>(r.u||0)>=(l.u||0)?r:l,
+        m=>{ if((m.u||0)>=(PROF.u||0) && JSON.stringify(m)!==JSON.stringify(metaPart())){ PROF.momEmail=m.momEmail||""; m.list.forEach(x=>{ const p=PROF.list.find(y=>y.id===x.id); if(p) Object.assign(p,x); else PROF.list.push(x); }); PROF.u=m.u; PROF._h=hashStr(JSON.stringify(metaPart().list)+PROF.momEmail); saveProfiles(true); changed=true; } });
+      // 学習記録（人ごと）
+      for(const p of PROF.list){
+        await syncFile("db-"+p.id, R, ()=>dbPart(profObj(p.id)), mergeDB,
+          m=>{ const d=profObj(p.id), before=hashStr(JSON.stringify(dbPart(d))); dbApply(d,m); if(hashStr(JSON.stringify(dbPart(d)))!==before){ changed=true; } profStore(p.id,d); },
+          {skipEmpty:dbIsEmpty});
+      }
+      // 手書きの答え（最近45日）
+      let all=await chkAll();
+      for(const r of all) if(!r.id){ r.id=DEV+"-c"+(r.ts||0).toString(36)+"-"+r.k; await chkPut(r); }
+      const since=addDays(today(),-45), names=new Set();
+      all.forEach(r=>{ if(r.prof && r.date>=since) names.add("chk-"+r.prof+"-"+r.date); });
+      Object.keys(R).forEach(n=>{ const m=n.match(/^chk-(\w+)-(\d{4}-\d\d-\d\d)$/); if(m && m[2]>=since) names.add(n); });
+      const need=[...names].filter(n=>R[n] && R[n]!==SYNC.revs[n]), PRE={};
+      for(let i=0;i<need.length;i+=8) Object.assign(PRE, (await api({op:"get", names:need.slice(i,i+8)}, 90000)).files);
+      for(const name of names){
+        const [, pid, date]=name.match(/^chk-(\w+)-(\d{4}-\d\d-\d\d)$/);
+        const loc=async()=>chkPart((await chkAll()).filter(r=>r.prof===pid && r.date===date));
+        await syncFile(name, R, loc, (l,r)=>({v:1, items:mergeChk(l.items, r.items||[])}),
+          async m=>{ const cur=(await chkAll()).filter(r=>r.prof===pid && r.date===date), byId={}; cur.forEach(r=>byId[r.id]=r);
+            for(const it of m.items){ const c=byId[it.id];
+              if(!c){ await chkAdd(Object.assign({},it)); chkChanged=true; }
+              else if((it.momAt||0)>(c.momAt||0)){ await chkPut(Object.assign({},it,{k:c.k})); chkChanged=true; } } }, {pre:PRE[name]});
+      }
+      // 問題データ：目次で「どれが新しいか」を見て、必要なものだけ送る・受け取る
+      const myIdx={}; for(const [id,s] of Object.entries(SETS)) myIdx[id]={u:s.u||1, subject:s.subject, unit:s.unit, level:s.level||"中学"};
+      for(const [id,u] of Object.entries(SYNC.del)) if(!myIdx[id] || myIdx[id].u<u) myIdx[id]={u, del:true};
+      let rIdx={};
+      if(R.sets && R.sets!==SYNC.revs.sets){ const f=(await api({op:"get", names:["sets"]})).files.sets; if(f && f.data) rIdx=JSON.parse(f.data).sets||{}; }
+      else if(R.sets) rIdx=SYNC.sidx||{};
+      const ids=new Set([...Object.keys(myIdx),...Object.keys(rIdx)]);
+      for(const id of ids){
+        const L=myIdx[id], Rr=rIdx[id];
+        if(Rr && (!L || Rr.u>L.u)){
+          if(Rr.del){ if(SETS[id]){ delete SETS[id]; await idbDel(id); changed=true; } SYNC.del[id]=Rr.u; }
+          else{ SYNC_STATE="busy-dl"; syncBadgeUpdate();
+            const f=(await api({op:"get", names:[setName(id)]}, 180000)).files[setName(id)];
+            if(f && f.data){ const s=JSON.parse(f.data); s.u=Rr.u; SETS[id]=s; delete POOL_CACHE[id]; await idbPut(id,s); delete SYNC.del[id]; changed=true; } }
+        }else if(L && (!Rr || L.u>Rr.u) && !L.del){
+          SYNC_STATE="busy-ul"; syncBadgeUpdate();
+          const data=JSON.stringify(SETS[id]); let base=R[setName(id)]||0, res=null;
+          for(let k=0;k<3;k++){ res=await api({op:"put", name:setName(id), base, data, nodata:true}, 180000); if(res.ok) break; if(res.conflict) base=res.rev; }
+          if(!res||!res.ok) throw new Error("問題データを送れませんでした");
+        }
+      }
+      const setsIdx=()=>({v:1, sets:Object.fromEntries(Object.entries(SETS).map(([id,s])=>[id,{u:s.u||1, subject:s.subject, unit:s.unit, level:s.level||"中学"}]).concat(Object.entries(SYNC.del).filter(([id])=>!SETS[id]).map(([id,u])=>[id,{u,del:true}])))});
+      await syncFile("sets", R, setsIdx,
+        (l,r)=>{ const o={v:1, sets:Object.assign({}, r.sets||{})}; for(const [id,x] of Object.entries(l.sets)) if(!o.sets[id]||x.u>o.sets[id].u) o.sets[id]=x; return o; }, ()=>{});
+      SYNC.sidx=setsIdx().sets;
+      SYNC.last=Date.now(); SYNC.err=""; SYNC.ok=1; SYNC_STATE="ok";
+    }catch(e){
+      SYNC.err=String(e.message||e); SYNC_STATE="err";
+      if(opt.manual) toast("同期できませんでした："+SYNC.err);
+    }finally{
+      saveSync(); syncBadgeUpdate();
+    }
+    if(changed||chkChanged){ await refreshPending(); syncRefreshView(); }
+    return changed||chkChanged;
+  })();
+  try{ return await SYNCING; }finally{ SYNCING=null; if(SYNC_AGAIN){ SYNC_AGAIN=false; syncSoon(1500); } }
+}
+function syncSoon(ms){ if(!syncOn()) return; clearTimeout(SYNC_TM); SYNC_TM=setTimeout(()=>syncNow(), ms==null?8000:ms); }
+/* ほかの端末の記録が入ったら、落ち着いている画面だけ描き直す */
+function syncRefreshView(){
+  const h=location.hash||"#top";
+  if(document.querySelector(".gintro,.gclear,.sheet")) return;
+  if(["#top","#who","#home","#settings","#stats","#mom","#units","#ktest-setup"].includes(h) || h==="") route();
+}
+function syncBadge(){ if(!syncOn()) return ""; return `<button class="icon syncb" id="syncb" onclick="go('#settings')" aria-label="同期">${syncIcon()}</button>`; }
+function syncIcon(){ return SYNC_STATE.startsWith("busy")?"🔄":SYNC_STATE==="err"?"⚠️":"☁️"; }
+function syncBadgeUpdate(){ const b=$("#syncb"); if(b) b.textContent=syncIcon(); const s=$("#syncst"); if(s) s.innerHTML=syncStatusHTML(); }
+function syncStatusHTML(){
+  if(SYNC_STATE.startsWith("busy")) return `🔄 同期中…${SYNC_STATE==="busy-dl"?"（問題データを受け取り中）":SYNC_STATE==="busy-ul"?"（問題データを送信中）":""}`;
+  if(SYNC.err) return `⚠️ 同期できませんでした：${esc(SYNC.err)}`;
+  if(SYNC.last){ const d=new Date(SYNC.last); return `✅ 最後の同期：${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
+  return "まだ同期していません";
+}
+/* 設定画面のカード */
+function syncCardHTML(){
+  if(!syncOn()) return `<h2>☁️ 端末どうしの同期</h2>
+    <div class="card"><p class="muted" style="margin-top:0">スマホとタブレットなど、2台以上で同じ記録を使うときの設定です。Googleドライブに記録を置きます。</p>
+      <label class="muted">同期のURL（Apps Scriptのウェブアプリ URL）</label><input class="field" id="syu" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+      <div class="spacer"></div><label class="muted">合言葉</label><input class="field" id="syk" placeholder="setup のログに出た合言葉" autocomplete="off">
+      <div class="spacer"></div><button class="btn" onclick="syncConnect($('#syu').value,$('#syk').value)">つなぐ</button></div>`;
+  return `<h2>☁️ 端末どうしの同期</h2>
+    <div class="card"><div id="syncst">${syncStatusHTML()}</div>
+      <p class="muted">この端末で使った記録・まちがえた問題・手書きの字・ダイヤ・問題データは、開いたとき／学習のあと／閉じたときに自動で同期します。</p>
+      <button class="btn sub" onclick="syncNow({manual:true}).then(c=>{ if(!SYNC.err) toast(c?'同期しました（新しい記録を受け取りました）':'同期しました'); })">今すぐ同期</button><div class="spacer"></div>
+      <button class="btn ghost" onclick="syncShareLink()">ほかの端末をつなぐリンクを送る</button>
+      <p class="hint">このリンクを、つなぎたい端末で開くだけで設定できます（家族の外には送らないでください）。</p>
+      <button class="btn ghost" style="color:var(--ng)" onclick="syncDisconnect()">この端末の同期をやめる</button></div>`;
+}
+async function syncConnect(url, key){
+  url=String(url||"").trim(); key=String(key||"").trim();
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url) && !/^http:\/\/localhost/.test(url)){ toast("URLは https://script.google.com/macros/s/…/exec の形です"); return false; }
+  if(!key){ toast("合言葉を入れてください"); return false; }
+  const old=Object.assign({},SYNC); SYNC.url=url; SYNC.key=key; SYNC.revs={}; SYNC.h={}; SYNC.err="";
+  try{ await api({op:"ping"}); }catch(e){ Object.assign(SYNC,old); toast("つなげませんでした："+e.message); return false; }
+  saveSync(); toast("つながりました。同期します…"); if(location.hash==="#settings") renderSettings();
+  await syncNow({manual:true}); if(!SYNC.err) toast("同期が完了しました ☁️"); if(location.hash==="#settings") renderSettings(); return true;
+}
+function syncDisconnect(){ if(!confirm("この端末の同期をやめますか？（記録はこの端末とドライブの両方に残ります）")) return; SYNC.url=""; SYNC.key=""; SYNC.revs={}; SYNC.h={}; SYNC.err=""; SYNC_STATE=""; saveSync(); renderSettings(); }
+function syncLink(){ return location.origin+location.pathname+"#sync="+encodeURIComponent(btoa(JSON.stringify({u:SYNC.url,k:SYNC.key}))); }
+function syncShareLink(){
+  const link=syncLink();
+  if(navigator.share){ navigator.share({title:"まなドリ 同期のリンク", text:"この端末で開くと、まなドリの同期がつながります", url:link}).catch(()=>{}); return; }
+  (navigator.clipboard?navigator.clipboard.writeText(link):Promise.reject()).then(()=>toast("リンクをコピーしました")).catch(()=>prompt("このリンクをコピーしてください",link));
+}
+/* 「#sync=…」のリンクで開いたとき */
+async function syncFromHash(h){
+  const m=String(h||"").match(/^#sync=(.+)$/); if(!m) return false;
+  let c; try{ c=JSON.parse(atob(decodeURIComponent(m[1]))); }catch(e){ toast("同期のリンクが正しくありません"); return false; }
+  if(!confirm("この端末を、まなドリの同期につなぎますか？\n（この端末の記録は、ドライブの記録と合体されます）")) return false;
+  return syncConnect(c.u, c.k);
+}
+document.addEventListener("visibilitychange",()=>{ if(!syncOn()) return;
+  if(document.visibilityState==="hidden") syncNow();
+  else if(Date.now()-(SYNC.last||0)>20000) syncNow(); });
+window.addEventListener("online",()=>syncSoon(1000));
 
 /* ---------- 起動 ---------- */
 (async function boot(){
-  loadProfiles(); load();
+  loadSync(); loadProfiles(); load();
+  const linkHash=(location.hash||"").startsWith("#sync=") ? location.hash : null; if(linkHash) history.replaceState(null,"","#top");
   app().innerHTML=`<div class="card emptybox">${doriSVG("normal",80)}<p class="muted">読み込み中…</p></div>`;
   idb=await idbOpen(); SETS=await idbAll();
   if(LEGACY_SETS){ for(const [id,s] of Object.entries(LEGACY_SETS)) if(!SETS[id]) await putSet(id,s); if(idb) save(); LEGACY_SETS=null; }
@@ -1971,6 +2243,7 @@ function resetProgress(){ if(!confirm("学習記録と模擬テストの記録�
   if(!location.hash || ["#quiz","#done","#test","#result","#mom"].includes(location.hash)) history.replaceState(null,"","#top");
   if(!asked) history.replaceState(null,"","#who");   // アプリを開いたら、まず「だれが べんきょうする？」
   route();
+  if(linkHash) syncFromHash(linkHash); else if(syncOn()) syncNow();
 })();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",()=>route());
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
