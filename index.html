@@ -296,7 +296,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.10.0";
+const APP_VER = "1.11.0";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -388,7 +388,7 @@ const app = () => document.getElementById("app");
 function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function qtext(s){ return esc(s).replace(/（　+）|\(　+\)/g,'<span class="blank"></span>').replace(/\n/g,"<br>"); }
 function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
-function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2800); }
+function toast(msg){ document.querySelectorAll(".toast").forEach(x=>x.remove()); const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2800); }
 function norm(s){ return String(s??"").normalize("NFKC").replace(/[\s　。、・,.!?！？「」]/g,"").toLowerCase(); }
 function hira(s){ return s.replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60)); }
 function isEn(s){ return /[A-Za-z]/.test(String(s||"")); }
@@ -2165,11 +2165,13 @@ function resetProgress(){ if(!confirm("学習記録と模擬テストの記録�
    ============================================================ */
 const SYNC_KEY="manadori:sync";
 const DEV=(()=>{ try{ let d=localStorage.getItem("manadori:dev"); if(!d){ d="d"+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4); localStorage.setItem("manadori:dev",d); } return d; }catch(e){ return "dx"; } })();
-let SYNC={url:"", key:"", revs:{}, h:{}, del:{}, last:0, err:"", ok:0};
+let SYNC={url:"", key:"", ghr:"", ght:"", ghk:"", ghb:"", revs:{}, h:{}, del:{}, last:0, err:"", ok:0};
+let SYNC_LINK=null;   // 「つなぐリンク」で開いたときの、リポジトリ名と鍵（合言葉は入れてもらう）
 let SYNCING=null, SYNC_AGAIN=false, SYNC_TM=null, SYNC_STATE="";
 function loadSync(){ try{ const r=localStorage.getItem(SYNC_KEY); if(r) SYNC=Object.assign(SYNC, JSON.parse(r)); }catch(e){} SYNC.revs||={}; SYNC.h||={}; SYNC.del||={}; }
 function saveSync(){ try{ localStorage.setItem(SYNC_KEY, JSON.stringify(SYNC)); }catch(e){} }
-function syncOn(){ return !!(SYNC.url && SYNC.key); }
+function syncOn(){ return !!((SYNC.ghr && SYNC.ght && SYNC.ghk) || (SYNC.url && SYNC.key)); }
+function syncGh(){ return !!(SYNC.ghr && SYNC.ght && SYNC.ghk); }
 function newId(){ return DEV+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,6); }
 function setName(id){ return "set-"+String(id).replace(/[^A-Za-z0-9_.\-]/g,c=>"_"+c.charCodeAt(0).toString(16)); }
 function hashStr(s){ let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); } return (h>>>0).toString(36)+":"+s.length; }
@@ -2248,6 +2250,7 @@ function metaPart(){ return {v:1, u:PROF.u||0, momEmail:PROF.momEmail||"", list:
 
 /* ---- サーバーとの通信 ---- */
 async function api(body, ms){
+  if(syncGh()) return ghApi(body, ms);
   const ac=new AbortController(), t=setTimeout(()=>ac.abort(), ms||30000);
   try{
     const r=await fetch(SYNC.url,{method:"POST", body:JSON.stringify(Object.assign({key:SYNC.key, v:1},body)), headers:{"Content-Type":"text/plain;charset=utf-8"}, signal:ac.signal, redirect:"follow"});
@@ -2374,42 +2377,157 @@ function syncStatusHTML(){
   return "まだ同期していません";
 }
 /* 設定画面のカード */
+/* ---- 保存先：GitHubの非公開リポジトリ（中身はこの端末で暗号化してから送る） ----
+   ・ファイルは data/<名前>.bin。中身は gzip → AES-GCM(256bit) で暗号化
+   ・鍵は家族の合言葉から PBKDF2(SHA-256, 60万回) で作る。合言葉そのものは保存しない
+   ・版番号として、GitHubのファイルの sha を使う（ちがう版への上書きは GitHub が断る → 合体し直す） */
+const GH_ITER = 600000, GH_DIR = "data/", GH_CHECK = "keycheck";
+const b64e = u8 => { let s=""; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null, u8.subarray(i,i+0x8000)); return btoa(s); };
+const b64d = s => { const b=atob(s), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; };
+async function ghDeriveKey(pass, repo){
+  const base=await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  const k=await crypto.subtle.deriveKey({name:"PBKDF2", hash:"SHA-256", salt:new TextEncoder().encode("manadori-sync:"+repo.toLowerCase()), iterations:GH_ITER}, base, {name:"AES-GCM", length:256}, true, ["encrypt","decrypt"]);
+  return b64e(new Uint8Array(await crypto.subtle.exportKey("raw", k)));
+}
+let GH_KEY=null;
+async function ghKey(){ if(!GH_KEY) GH_KEY=await crypto.subtle.importKey("raw", b64d(SYNC.ghk), "AES-GCM", false, ["encrypt","decrypt"]); return GH_KEY; }
+async function gzipU8(u8, dir){
+  if(typeof CompressionStream==="undefined") return null;
+  const s=new Blob([u8]).stream().pipeThrough(dir==="c"?new CompressionStream("gzip"):new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function ghEnc(text){   // → "MD1" + 方式(1byte) + iv(12) + 暗号文
+  let body=new TextEncoder().encode(text), z=0; const g=await gzipU8(body,"c"); if(g){ body=g; z=1; }
+  const iv=crypto.getRandomValues(new Uint8Array(12)), ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, await ghKey(), body));
+  const out=new Uint8Array(4+12+ct.length); out.set([77,68,49,z]); out.set(iv,4); out.set(ct,16); return out;
+}
+async function ghDec(u8){
+  if(!(u8[0]===77&&u8[1]===68&&u8[2]===49)) throw new Error("同期データの形式がちがいます");
+  let pt; try{ pt=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv:u8.subarray(4,16)}, await ghKey(), u8.subarray(16))); }
+  catch(e){ throw new Error("合言葉がちがいます（暗号を解けません）"); }
+  if(u8[3]===1){ const g=await gzipU8(pt,"d"); if(!g) throw new Error("この端末のブラウザが古いため読めません"); pt=g; }
+  return new TextDecoder().decode(pt);
+}
+async function ghFetch(path, opt, ms){
+  const ac=new AbortController(), t=setTimeout(()=>ac.abort(), ms||30000);
+  try{
+    const r=await fetch((SYNC.ghBase||"https://api.github.com")+path, Object.assign({cache:"no-store", signal:ac.signal}, opt||{},
+      {headers:Object.assign({"Authorization":"Bearer "+SYNC.ght, "Accept":"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28"}, (opt&&opt.headers)||{})}));
+    if(r.status===401) throw new Error("鍵（トークン）が正しくないか、期限が切れています");
+    if(r.status===403 && r.headers.get("x-ratelimit-remaining")==="0") throw new Error("GitHubの回数制限です。しばらくしてからもう一度");
+    return r;
+  }catch(e){ if(e.name==="AbortError") throw new Error("時間切れ（電波を確認してください）"); if(e instanceof TypeError) throw new Error("つながりません（電波を確認してください）"); throw e; }
+  finally{ clearTimeout(t); }
+}
+const ghRepoPath = () => "/repos/"+SYNC.ghr.split("/").map(encodeURIComponent).join("/");
+async function ghList(){
+  const r=await ghFetch(ghRepoPath()+"/git/trees/"+encodeURIComponent(SYNC.ghb||"main")+"?recursive=1");
+  if(r.status===409 || r.status===404) return {};                     // まだ空のリポジトリ
+  if(!r.ok) throw new Error("一覧を読めませんでした（"+r.status+"）");
+  const j=await r.json(), out={};
+  (j.tree||[]).forEach(e=>{ if(e.type==="blob" && e.path.startsWith(GH_DIR) && e.path.endsWith(".bin")) out[e.path.slice(GH_DIR.length,-4)]=e.sha; });
+  return out;
+}
+async function ghRead(name, ms){
+  const r=await ghFetch(ghRepoPath()+"/contents/"+GH_DIR+encodeURIComponent(name)+".bin?ref="+encodeURIComponent(SYNC.ghb||"main"), {headers:{"Accept":"application/vnd.github.raw"}}, ms);
+  if(r.status===404) return null;
+  if(!r.ok) throw new Error("読めませんでした（"+r.status+"）");
+  return ghDec(new Uint8Array(await r.arrayBuffer()));
+}
+async function ghWrite(name, base, data, ms){
+  const body={message:"sync "+name, content:b64e(await ghEnc(data)), branch:SYNC.ghb||"main"}; if(base) body.sha=base;
+  const r=await ghFetch(ghRepoPath()+"/contents/"+GH_DIR+encodeURIComponent(name)+".bin", {method:"PUT", body:JSON.stringify(body), headers:{"Content-Type":"application/json"}}, ms);
+  if(r.ok){ const j=await r.json(); return {ok:true, rev:j.content.sha}; }
+  if(r.status===409 || r.status===422) return {conflict:true};       // ほかの端末が先に書いた
+  if(r.status===403||r.status===404) throw new Error("書きこむ権限がありません（トークンの権限「Contents：Read and write」を確認）");
+  throw new Error("保存できませんでした（"+r.status+"）");
+}
+/* GAS と同じ形（ping / list / get / put）で返す */
+async function ghApi(body, ms){
+  if(body.op==="ping"){
+    const r=await ghFetch(ghRepoPath());
+    if(r.status===404) throw new Error("リポジトリが見つかりません（名前・トークンの対象リポジトリを確認）");
+    if(!r.ok) throw new Error("つながりません（"+r.status+"）");
+    const j=await r.json(); SYNC.ghb=j.default_branch||"main";
+    if(j.private===false) throw new Error("このリポジトリは公開（Public）になっています。非公開（Private）のリポジトリを使ってください");
+    if(j.permissions && j.permissions.push===false) throw new Error("書きこむ権限がありません（トークンの権限「Contents：Read and write」を確認）");
+    // 合言葉の確認：暗号化した目印ファイルを読めるか（なければ作る）
+    const L=await ghList();
+    if(L[GH_CHECK]){ const t=await ghRead(GH_CHECK); if(t!=="manadori-ok") throw new Error("合言葉がちがいます"); }
+    else{ const w=await ghWrite(GH_CHECK, 0, "manadori-ok"); if(!w.ok) throw new Error("最初の保存ができませんでした"); }
+    return {ok:true};
+  }
+  if(body.op==="list") return {ok:true, revs:await ghList()};
+  if(body.op==="get"){ const L=await ghList(), files={};
+    for(const n of body.names){ files[n]={rev:L[n]||0, data:L[n]?await ghRead(n, ms):null}; } return {ok:true, files}; }
+  if(body.op==="put"){
+    const w=await ghWrite(body.name, body.base||0, body.data, ms); if(w.ok) return w;
+    const L=await ghList(), rev=L[body.name]||0;
+    return {conflict:true, rev, data: body.nodata||!rev ? null : await ghRead(body.name, ms)};
+  }
+  throw new Error("op");
+}
+
+/* 設定画面のカード */
 function syncCardHTML(){
-  if(!syncOn()) return `<h2>☁️ 端末どうしの同期</h2>
-    <div class="card"><p class="muted" style="margin-top:0">スマホとタブレットなど、2台以上で同じ記録を使うときの設定です。Googleドライブに記録を置きます。</p>
-      <label class="muted">同期のURL（Apps Scriptのウェブアプリ URL）</label><input class="field" id="syu" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
-      <div class="spacer"></div><label class="muted">合言葉</label><input class="field" id="syk" placeholder="setup のログに出た合言葉" autocomplete="off">
-      <div class="spacer"></div><button class="btn" onclick="syncConnect($('#syu').value,$('#syk').value)">つなぐ</button></div>`;
+  if(!syncOn()){ const L=SYNC_LINK||{};
+    return `<h2>☁️ 端末どうしの同期</h2>
+    <div class="card" id="synccard"><p class="muted" style="margin-top:0">スマホとタブレットなど、2台以上で同じ記録を使うときの設定です。記録は<b>この端末で暗号化</b>してから、GitHubの非公開リポジトリに置きます。</p>
+      ${L.r?`<p class="hint" style="color:var(--pri-deep)">🔗 つなぐリンクから開きました。<b>合言葉</b>を入れて「つなぐ」を押してください。</p>`:""}
+      <label class="muted">リポジトリ名（例：S-ryo505/manadori-data）</label><input class="field" id="syr" value="${esc(L.r||"")}" placeholder="ユーザー名/リポジトリ名" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="spacer"></div><label class="muted">鍵（トークン。github_pat_ で始まる長い文字）</label><input class="field" id="syt" type="password" value="${esc(L.t||"")}" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="spacer"></div><label class="muted">家族の合言葉（暗号化に使います。全部の端末で同じものを入れる）</label><input class="field" id="syp" type="password" placeholder="8文字以上" autocomplete="off" autocapitalize="off">
+      <label class="check" style="margin-top:6px"><input type="checkbox" onchange="['syt','syp'].forEach(i=>$('#'+i).type=this.checked?'text':'password')"><span>入力した文字を表示する</span></label>
+      <div class="spacer"></div><button class="btn" id="sygo" onclick="syncConnectGh($('#syr').value,$('#syt').value,$('#syp').value)">つなぐ</button>
+      <p class="hint" style="margin-bottom:0">合言葉を忘れると、GitHubに置いた記録は誰にも読めなくなります（この端末の記録は残ります）。紙などに控えておいてください。</p></div>`; }
   return `<h2>☁️ 端末どうしの同期</h2>
     <div class="card"><div id="syncst">${syncStatusHTML()}</div>
-      <p class="muted">この端末で使った記録・まちがえた問題・手書きの字・ダイヤ・問題データは、開いたとき／学習のあと／閉じたときに自動で同期します。</p>
+      <p class="muted">保存先：${esc(SYNC.ghr||"Googleドライブ")}${syncGh()?"（暗号化あり）":""}<br>この端末で使った記録・まちがえた問題・手書きの字・ダイヤ・問題データは、開いたとき／学習のあと／閉じたときに自動で同期します。</p>
       <button class="btn sub" onclick="syncNow({manual:true}).then(c=>{ if(!SYNC.err) toast(c?'同期しました（新しい記録を受け取りました）':'同期しました'); })">今すぐ同期</button><div class="spacer"></div>
       <button class="btn ghost" onclick="syncShareLink()">ほかの端末をつなぐリンクを送る</button>
-      <p class="hint">このリンクを、つなぎたい端末で開くだけで設定できます（家族の外には送らないでください）。</p>
+      <p class="hint">リンクには合言葉は入っていません。つなぐ端末で合言葉を入れてください。リンクは家族の外には送らないでください。</p>
       <button class="btn ghost" style="color:var(--ng)" onclick="syncDisconnect()">この端末の同期をやめる</button></div>`;
 }
-async function syncConnect(url, key){
-  url=String(url||"").trim(); key=String(key||"").trim();
-  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url) && !/^http:\/\/localhost/.test(url)){ toast("URLは https://script.google.com/macros/s/…/exec の形です"); return false; }
-  if(!key){ toast("合言葉を入れてください"); return false; }
-  const old=Object.assign({},SYNC); SYNC.url=url; SYNC.key=key; SYNC.revs={}; SYNC.h={}; SYNC.err="";
-  try{ await api({op:"ping"}); }catch(e){ Object.assign(SYNC,old); toast("つなげませんでした："+e.message); return false; }
-  saveSync(); toast("つながりました。同期します…"); if(location.hash==="#settings") renderSettings();
+async function syncConnectGh(repo, token, pass, base){
+  repo=String(repo||"").trim().replace(/^https?:\/\/github\.com\//,"").replace(/\.git$/,"").replace(/\/+$/,""); token=String(token||"").trim(); pass=String(pass||"");
+  if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){ toast("リポジトリ名は「ユーザー名/リポジトリ名」の形で入れてください"); return false; }
+  if(!token){ toast("鍵（トークン）を入れてください"); return false; }
+  if(pass.length<8){ toast("合言葉は8文字以上にしてください"); return false; }
+  if(!(window.crypto&&crypto.subtle)){ toast("このブラウザでは暗号化が使えません（https のページで開いてください）"); return false; }
+  const btn=$("#sygo"); if(btn){ btn.disabled=true; btn.textContent="鍵を作っています…（数秒）"; }
+  const old=JSON.parse(JSON.stringify(SYNC));
+  try{
+    SYNC.ghr=repo; SYNC.ght=token; SYNC.ghBase=base||SYNC.ghBase||""; SYNC.url=""; SYNC.key=""; SYNC.revs={}; SYNC.h={}; SYNC.err=""; GH_KEY=null;
+    SYNC.ghk=await ghDeriveKey(pass, repo);
+    if(btn) btn.textContent="つないでいます…";
+    await api({op:"ping"});
+  }catch(e){ SYNC=old; GH_KEY=null; if(btn){ btn.disabled=false; btn.textContent="つなぐ"; } toast("つなげませんでした："+e.message); return false; }
+  SYNC_LINK=null; saveSync(); toast("つながりました。同期します…"); if(location.hash==="#settings") renderSettings();
   await syncNow({manual:true}); if(!SYNC.err) toast("同期が完了しました ☁️"); if(location.hash==="#settings") renderSettings(); return true;
 }
-function syncDisconnect(){ if(!confirm("この端末の同期をやめますか？（記録はこの端末とドライブの両方に残ります）")) return; SYNC.url=""; SYNC.key=""; SYNC.revs={}; SYNC.h={}; SYNC.err=""; SYNC_STATE=""; saveSync(); renderSettings(); }
-function syncLink(){ return location.origin+location.pathname+"#sync="+encodeURIComponent(btoa(JSON.stringify({u:SYNC.url,k:SYNC.key}))); }
+async function syncConnect(url, key){   // 旧方式（Googleドライブ）。今は画面からは使わない
+  url=String(url||"").trim(); key=String(key||"").trim();
+  const old=Object.assign({},SYNC); SYNC.url=url; SYNC.key=key; SYNC.ghr=""; SYNC.revs={}; SYNC.h={}; SYNC.err="";
+  try{ await api({op:"ping"}); }catch(e){ Object.assign(SYNC,old); toast("つなげませんでした："+e.message); return false; }
+  saveSync(); await syncNow({manual:true}); if(location.hash==="#settings") renderSettings(); return true;
+}
+function syncDisconnect(){ if(!confirm("この端末の同期をやめますか？（記録はこの端末とGitHubの両方に残ります）")) return;
+  Object.assign(SYNC,{url:"", key:"", ghr:"", ght:"", ghk:"", ghb:"", revs:{}, h:{}, err:""}); GH_KEY=null; SYNC_STATE=""; saveSync(); renderSettings(); }
+function syncLink(){ const o=syncGh()?{r:SYNC.ghr, t:SYNC.ght, b:SYNC.ghBase||undefined}:{u:SYNC.url, k:SYNC.key};
+  return location.origin+location.pathname+"#sync="+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(o))))); }
 function syncShareLink(){
   const link=syncLink();
-  if(navigator.share){ navigator.share({title:"まなドリ 同期のリンク", text:"この端末で開くと、まなドリの同期がつながります", url:link}).catch(()=>{}); return; }
+  if(navigator.share){ navigator.share({title:"まなドリ 同期のリンク", text:"この端末で開いて、家族の合言葉を入れると、まなドリの同期がつながります", url:link}).catch(()=>{}); return; }
   (navigator.clipboard?navigator.clipboard.writeText(link):Promise.reject()).then(()=>toast("リンクをコピーしました")).catch(()=>prompt("このリンクをコピーしてください",link));
 }
 /* 「#sync=…」のリンクで開いたとき */
 async function syncFromHash(h){
   const m=String(h||"").match(/^#sync=(.+)$/); if(!m) return false;
-  let c; try{ c=JSON.parse(atob(decodeURIComponent(m[1]))); }catch(e){ toast("同期のリンクが正しくありません"); return false; }
-  if(!confirm("この端末を、まなドリの同期につなぎますか？\n（この端末の記録は、ドライブの記録と合体されます）")) return false;
-  return syncConnect(c.u, c.k);
+  let c; try{ c=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))); }catch(e){ toast("同期のリンクが正しくありません"); return false; }
+  if(c.u){ if(!confirm("この端末を、まなドリの同期につなぎますか？")) return false; return syncConnect(c.u, c.k); }
+  SYNC_LINK={r:c.r, t:c.t}; if(c.b) SYNC.ghBase=c.b;
+  go("#settings"); setTimeout(()=>{ const el=$("#synccard"); if(el){ el.scrollIntoView({block:"center"}); const p=$("#syp"); if(p) p.focus(); } },300);
+  toast("家族の合言葉を入れて「つなぐ」を押してね"); return true;
 }
 document.addEventListener("visibilitychange",()=>{ if(!syncOn()) return;
   if(document.visibilityState==="hidden") syncNow();
