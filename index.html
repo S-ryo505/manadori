@@ -288,7 +288,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.8.0";
+const APP_VER = "1.9.0";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -461,7 +461,80 @@ const GENS = {
   spring(){ const w1=pick([10,20,25,50]), x1=pick([1,1.5,2,2.5,3,4]), k=pick([2,3,4,1.5,2.5]); const w2=w1*k, x2=r1(x1*k);
     return {q:`${w1}gのおもりをつるすと${x1}cmのびるばねがある。${w2}gのおもりをつるすと何cmのびる？`,ans:x2,unit:"cm",steps:`ばねののびは、加えた力（おもりの重さ）に比例する（フックの法則）\n${w2} ÷ ${w1} ＝ ${k}倍\n${x1} × ${k} ＝ ${x2}`}; }
 };
-function calcOk(input, ans){ const x=parseFloat(String(input).normalize("NFKC").replace(/[^\d.\-]/g,"")); if(isNaN(x)) return false; return Math.abs(x-ans)<=Math.max(Math.abs(ans)*0.01,0.001); }
+/* ---- 理科「物質のすがた」：毎回数字が変わる問題（教科書の表の数値を使う） ---- */
+const RK = {
+  dens: {金:19.32, 銀:10.49, 銅:8.96, 鉄:7.87, 亜鉛:7.14, アルミニウム:2.70, マグネシウム:1.74},
+  liq: {水銀:13.55, 水:1.00, エタノール:0.79, なたね油:0.92},
+  mpbp: {鉄:[1535,2750], 銅:[1083,2567], アルミニウム:[660,2467], 塩化ナトリウム:[801,1413], 水銀:[-39,357], メントール:[43,217], 水:[0,100], エタノール:[-115,78], アセトン:[-95,56], 酸素:[-218,-183], 窒素:[-210,-196]},
+  sol: {硝酸カリウム:{0:13.3,20:31.6,40:63.9,60:109.2,80:168.8, t:"t_sol1"}, 塩化ナトリウム:{0:35.6,20:35.8,40:36.3,60:37.1,80:38.0, t:"t_sol1"},
+        ホウ酸:{0:2.8,20:4.9,40:8.9,60:14.9,80:23.5, t:"t_sol2"}, 硫酸銅:{0:23.8,20:35.7,40:53.6,60:80.5,80:128, t:"t_sol2"}},
+};
+function r1x(x){ return Math.round(x*10)/10; }
+function fx(x){ return String(Math.round(x*100)/100); }
+function nearest(rho){ return Object.entries(RK.dens).sort((a,b)=>Math.abs(a[1]-rho)-Math.abs(b[1]-rho))[0][0]; }
+Object.assign(GENS, {
+  rk_density(){ const [nm,rho]=pick(Object.entries(RK.dens)), V=pick([2,2.5,3,4,5,6,8,10,12,15,20]), m=r1x(rho*V), d=Math.round(m/V*100)/100;
+    return {q:`ある金属の質量は ${m} g、体積は ${V} cm³ だった。この金属の密度は何 g/cm³ か。（小数第2位まで）`, ans:d, unit:"g/cm³",
+      steps:`密度[g/cm³] ＝ 質量[g] ÷ 体積[cm³]\n＝ ${m} ÷ ${V} ＝ ${fx(d)}\n（表の ${nm}（${rho}）に近い）`}; },
+  rk_identify(){ const [nm,rho]=pick(Object.entries(RK.dens)), V=pick([2,2.5,4,5,6,8,10,12]), m=r1x(rho*V), d=m/V;
+    const wrong=shuffle(Object.keys(RK.dens).filter(k=>k!==nm)).slice(0,3);
+    return {choice:true, img:"t_density", q:`体積 ${V} cm³、質量 ${m} g の金属がある。表から考えると、この金属は何か。`, a:nm, wrong,
+      steps:`密度 ＝ ${m} ÷ ${V} ＝ ${fx(d)} g/cm³\n表で最も近いのは ${nm}（${rho} g/cm³）`}; },
+  rk_mass(){ const all=Object.assign({},RK.dens,{エタノール:0.79, 水銀:13.55}); const [nm,rho]=pick(Object.entries(all)), V=pick([5,10,20,25,50,100,150,200]), m=Math.round(rho*V*100)/100;
+    return {q:`${nm}（密度 ${rho} g/cm³）${V} cm³ の質量は何 g か。`, ans:m, unit:"g",
+      steps:`質量[g] ＝ 密度[g/cm³] × 体積[cm³]（密度の式を変形）\n＝ ${rho} × ${V} ＝ ${fx(m)}`}; },
+  rk_volume(){ const [nm,rho]=pick(Object.entries(RK.dens)), V=pick([2,4,5,10,20,50,100]), m=Math.round(rho*V*100)/100;
+    return {q:`${nm}（密度 ${rho} g/cm³）${fx(m)} g の体積は何 cm³ か。`, ans:V, unit:"cm³",
+      steps:`体積[cm³] ＝ 質量[g] ÷ 密度[g/cm³]\n＝ ${fx(m)} ÷ ${rho} ＝ ${V}`}; },
+  rk_disp(){ const [nm,rho]=pick(Object.entries(RK.dens)), v0=pick([30.0,40.0,50.0,52.0,60.0]), V=pick([2.0,2.5,3.0,4.0,5.0,6.0]), m=r1x(rho*V), d=Math.round(m/V*100)/100;
+    return {q:`水を ${v0.toFixed(1)} mL 入れたメスシリンダーに、質量 ${m} g の金属を静かに沈めると、目もりが ${(v0+V).toFixed(1)} mL になった。この金属の密度は何 g/cm³ か。（小数第2位まで）`, ans:d, unit:"g/cm³",
+      steps:`金属の体積 ＝ ${(v0+V).toFixed(1)} − ${v0.toFixed(1)} ＝ ${V.toFixed(1)} cm³（1 mL ＝ 1 cm³）\n密度 ＝ ${m} ÷ ${V.toFixed(1)} ＝ ${fx(d)} g/cm³（${nm} に近い）`}; },
+  rk_float(){ const liq=pick([["水",1.00],["水銀",13.55],["エタノール",0.79]]), cands=Object.entries(Object.assign({},RK.dens,{氷:0.92, なたね油:0.92, ショ糖:1.59}));
+    const [nm,rho]=pick(cands.filter(([k])=>k!==liq[0])), fl=rho<liq[1];
+    return {choice:true, img:"t_density", q:`表から考えると、${nm} を ${liq[0]}（${liq[1]} g/cm³）に入れたとき、${nm} は浮く？沈む？`, a:fl?"浮く":"沈む", wrong:[fl?"沈む":"浮く"],
+      steps:`${nm} の密度 ${rho} g/cm³ は ${liq[0]} の ${liq[1]} g/cm³ より ${fl?"小さい":"大きい"} → ${fl?"浮く":"沈む"}`}; },
+  rk_state(){ const [nm,[mp,bp]]=pick(Object.entries(RK.mpbp)); let T;
+    const r=Math.random(); if(r<.34) T=mp-pick([5,10,20,30,50]); else if(r<.67) T=Math.round(mp+(bp-mp)*pick([.2,.4,.5,.7])); else T=bp+pick([5,10,20,50,100]);
+    const st=T<mp?"固体":T<bp?"液体":"気体";
+    return {choice:true, img:"t_mpbp", q:`表から考えると、${nm} は ${T}℃ のとき、固体・液体・気体のどれ？`, a:st, wrong:["固体","液体","気体"].filter(x=>x!==st),
+      steps:`${nm}：融点 ${mp}℃、沸点 ${bp}℃\n融点より低い→固体、融点と沸点の間→液体、沸点より高い→気体\n${T}℃ は ${st==="固体"?"融点より低い":st==="液体"?"融点と沸点の間":"沸点より高い"} → ${st}`}; },
+  rk_fahr(){ if(Math.random()<.5){ const C=pick([-10,0,10,20,25,30,37,40,60,100]), F=r1x(1.8*C+32);
+      return {q:`【発展】${C}℃ は何 °F（華氏）か。（華氏 ＝ 1.8 × 摂氏 ＋ 32）`, ans:F, unit:"°F", steps:`華氏 ＝ 1.8 × ${C} ＋ 32 ＝ ${F}`}; }
+    const C=pick([0,5,10,20,25,30,40,50,100]), F=r1x(1.8*C+32);
+    return {q:`【発展】${F} °F は何 ℃（摂氏）か。（華氏 ＝ 1.8 × 摂氏 ＋ 32）`, ans:C, unit:"℃", steps:`摂氏 ＝ （華氏 − 32）÷ 1.8\n＝ （${F} − 32）÷ 1.8 ＝ ${C}`}; },
+  rk_ice(){ const k=Math.random();
+    if(k<.4){ return {q:"水の密度は 1.00 g/cm³、氷の密度は 0.92 g/cm³ である。水が氷になると、体積は何倍になるか。（小数第1位まで）", ans:1.1, unit:"倍",
+      steps:"質量は変わらない。水 1 cm³（1.00 g）が氷になると、体積 ＝ 1.00 ÷ 0.92 ＝ 1.08… → 約 1.1 倍"}; }
+    const m=pick([46,92,138,184,230,460]), V=Math.round(m/0.92*10)/10;
+    if(k<.7) return {q:`水 ${m} g をすべて氷にした。氷の体積は何 cm³ か。（氷の密度 0.92 g/cm³）`, ans:V, unit:"cm³", steps:`状態変化で質量は変わらない → 氷も ${m} g\n体積 ＝ ${m} ÷ 0.92 ＝ ${V}`};
+    return {q:`水 ${m} cm³ をすべて氷にした。氷の質量は何 g か。（水 1.00 g/cm³、氷 0.92 g/cm³）`, ans:m, unit:"g", steps:`水の質量 ＝ 1.00 × ${m} ＝ ${m} g\n状態変化で質量は変わらない → ${m} g（体積は大きくなるが、質量は同じ）`}; },
+  rk_conc(){ const T=pick([50,80,100,120,125,150,200,250,300,400,500]), p=pick([2,4,5,8,10,12,15,16,20,24,25,30,40]), s=T*p/100;
+    if(!Number.isInteger(s)) return GENS.rk_conc(); const w=T-s, trap=Math.round(s/w*1000)/10;
+    return {q:`水 ${w} g に砂糖 ${s} g を溶かした。この砂糖水の質量パーセント濃度は何 % か。`, ans:p, unit:"%",
+      steps:`水溶液の質量 ＝ 水 ＋ 溶質 ＝ ${w} ＋ ${s} ＝ ${T} g\n濃度 ＝ ${s} ÷ ${T} × 100 ＝ ${p}\n⚠️ ${s} ÷ ${w} × 100 ＝ ${trap} とするのはまちがい（分母は水溶液全体）`}; },
+  rk_solute(){ const T=pick([50,100,150,200,250,300,400,500,1000]), p=pick([3,4,5,8,10,12,15,20,25,32]), s=T*p/100;
+    const kg=T===1000&&Math.random()<.5;
+    return {q:`質量パーセント濃度 ${p} % の食塩水 ${kg?"1 kg":T+" g"} に溶けている食塩は何 g か。`, ans:s, unit:"g",
+      steps:`${kg?"1 kg ＝ 1000 g\n":""}溶質の質量 ＝ 水溶液の質量 × 濃度 ÷ 100\n＝ ${T} × ${p} ÷ 100 ＝ ${s}`}; },
+  rk_water(){ const T=pick([50,100,150,200,250,300,400,500]), p=pick([2,4,5,8,10,12,15,20,25]), s=T*p/100;
+    if(!Number.isInteger(s*10)) return GENS.rk_water();
+    return {q:`${p} % の砂糖水を ${T} g つくりたい。砂糖と水はそれぞれ何 g 必要か。水の質量を答えよう。`, ans:T-s, unit:"g",
+      steps:`砂糖 ＝ ${T} × ${p} ÷ 100 ＝ ${s} g\n水 ＝ ${T} − ${s} ＝ ${T-s} g`}; },
+  rk_dilute(){ const T=pick([100,200,300,400]), p1=pick([10,12,20,25]), p2=pick([2,4,5,8,10].filter(x=>x<p1&&((T*p1/100)/x*100)%1===0));
+    if(!p2) return GENS.rk_dilute(); const s=T*p1/100, T2=s/p2*100;
+    return {q:`【チャレンジ】${p1} % の食塩水 ${T} g に水を加えて ${p2} % にしたい。水を何 g 加えればよいか。`, ans:T2-T, unit:"g",
+      steps:`食塩の量は変わらない：${T} × ${p1} ÷ 100 ＝ ${s} g\n${p2} % にするための水溶液全体：${s} ÷ ${p2} × 100 ＝ ${T2} g\n加える水 ＝ ${T2} − ${T} ＝ ${T2-T} g`}; },
+  rk_recryst(){ const nm=pick(["硝酸カリウム","硝酸カリウム","硫酸銅","ホウ酸"]), S=RK.sol[nm], hi=pick([40,60,80].filter(t=>!(nm==="硝酸カリウム"&&t===80&&Math.random()<.5))),
+      lo=pick([0,20,40].filter(t=>t<hi)), W=pick([100,100,50,200,25]), ans=r1x((S[hi]-S[lo])*W/100);
+    return {img:S.t, q:`${hi}℃ の水 ${W} g に ${nm} を溶けるだけ溶かして飽和水溶液をつくった。これを ${lo}℃ まで冷やすと、何 g の結晶が出てくるか。（表を使い、小数第1位まで）`, ans, unit:"g",
+      steps:`水100gあたり：${hi}℃で ${S[hi]} g、${lo}℃で ${S[lo]} g 溶ける → 差は ${r1x(S[hi]-S[lo])} g\n${W===100?"水は100gなので":`水は ${W} g なので ×${W}/100 して`} ${r1x(S[hi]-S[lo])}${W===100?"":` × ${W} ÷ 100`} ＝ ${ans} g`}; },
+  rk_left(){ const nm=pick(["塩化ナトリウム","硝酸カリウム","ホウ酸","硫酸銅"]), S=RK.sol[nm], T=pick([0,20,40,60]), W=pick([100,100,50]),
+      lim=S[T]*W/100, x=Math.round(lim*pick([.7,.9,1.1,1.3,1.6])), left=Math.max(0,r1x(x-lim));
+    return {img:S.t, q:`${T}℃ の水 ${W} g に ${nm} を ${x} g 入れてよくかき混ぜた。溶け残るのは何 g か。（全部溶けるなら 0。小数第1位まで）`, ans:left, unit:"g",
+      steps:`${T}℃ の水100gに溶けるのは ${S[T]} g${W===100?"":` → 水 ${W} g なら ${S[T]} × ${W} ÷ 100 ＝ ${r1x(lim)} g`}\n${x} g ${x>lim?`− ${r1x(lim)} g ＝ ${left} g が溶け残る`:`は ${r1x(lim)} g 以下なので、全部溶ける → 0 g`}`}; },
+});
+
+function calcOk(input, ans){ const x=parseFloat(String(input).normalize("NFKC").replace(/[−ー‐－]/g,"-").replace(/[^\d.\-]/g,"")); if(isNaN(x)) return false; return Math.abs(x-ans)<=Math.max(Math.abs(ans)*0.01,0.001); }
 
 /* ---------- 「選ぶ」と「書く」をランダムに出し分ける ---------- */
 function scriptClass(s){ s=String(s); if(/^[\d.,]+/.test(s)) return "num"; if(isEn(s)&&!hasJa(s)) return "en"; if(/^[ァ-ヶー・（）()]+$/.test(s)) return "kata"; return "ja"; }
@@ -589,7 +662,10 @@ function kanaDistract(r){   // 読みの選択肢が足りないときの予備�
   const arr=[...out].slice(0,3); return arr.length===3?arr:null;
 }
 function variant(q){
-  if(q.type==="calc"){ const g=GENS[q.gen]; return g ? Object.assign({},q,{calc:g(), fmt:"calc", fmts:["calc"]}) : Object.assign({},q,{type:"term",q:"（計算テンプレートなし）",a:"-"}); }
+  if(q.type==="calc"){ const g=GENS[q.gen]; if(!g) return Object.assign({},q,{type:"term",q:"（計算テンプレートなし）",a:"-"});
+    const c=g();   // 毎回数字が変わる。choice:true なら「選ぶ」問題として出す
+    if(c.choice) return Object.assign({},q,{type:"choice", q:c.q, a:c.a, wrong:c.wrong, ex:c.steps, img:c.img||q.img, fmt:"calc", fmts:["calc"], _gen:true});
+    return Object.assign({},q,{calc:c, img:c.img||q.img, fmt:"calc", fmts:["calc"]}); }
   if(!SETS[q.setId]) return q;
   const fmts=formatsOf(q); let f=chooseFmt(q,fmts), v=buildFmt(q,f);
   if(!v){ for(const g of shuffle(fmts)){ if(g!==f && (v=buildFmt(q,g))) break; } }
@@ -982,7 +1058,7 @@ function renderQuiz(){
       ${st.ok && !st.soft ? `<button class="btn ghost unsure" onclick="markUnsure()">🤔 じつは自信なかった（明日もう1回）</button>` : ""}
       ${q.kmode==="kaki" && st.checkKey ? `<div class="ex">👩 この字は おうちの人チェックに 送ったよ</div>` : ""}
       ${st.note?`<div class="ex" style="color:var(--star)">✏️ ${esc(st.note)}</div>`:""}
-      ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${sayAfter}${exCard(q)}${q.kmode&&q.kmode!=="kaki"?`<div class="answer kans"><div class="kbig">${esc(q.w)}</div><div class="muted">${esc(q.r)}</div></div>${strokeBtn(q)}`:""}
+      ${q.ex?`<div class="ex">💡 ${esc(q.ex).replace(/\n/g,"<br>")}</div>`:""}${sayAfter}${exCard(q)}${q.kmode&&q.kmode!=="kaki"?`<div class="answer kans"><div class="kbig">${esc(q.w)}</div><div class="muted">${esc(q.r)}</div></div>${strokeBtn(q)}`:""}
       ${q.page?`<div class="ex">📘 教科書 ${esc(q.page)}</div>`:""}
       <div class="spacer"></div><button class="btn" onclick="nextQ()">次へ ▶</button>` : "";
   const hintBox = st.hint ? `<div class="hintline ${en?"ans-en":""}">ヒント：${esc(hintText(q.a))}</div>` : "";
@@ -1050,7 +1126,7 @@ function renderQuiz(){
   }
   else if(q.type==="calc"){
     const c=q.calc;
-    body=`<div class="q">${esc(c.q)}</div>${st.done?`<div class="answer"><div class="muted">答え</div><div class="a">${c.ans} ${esc(c.unit)}</div>
+    body=`${imgTag(q)}<div class="q">${esc(c.q)}</div>${st.done?`<div class="answer"><div class="muted">答え</div><div class="a">${c.ans} ${esc(c.unit)}</div>
           <div class="muted">あなたの答え：${esc(st.input||"（空欄）")}</div><div style="white-space:pre-wrap;margin-top:8px;font-size:15px">${esc(c.steps)}</div></div>${after}`
       :`<div class="row" style="align-items:center;margin-top:14px"><input class="field" style="margin:0" id="inp" inputmode="decimal" placeholder="数字で答える"><span style="flex:0 0 auto;font-weight:700">${esc(c.unit)}</span></div>
           <div class="spacer"></div><div class="row"><button class="btn ghost" onclick="giveUp()">🤔 わからない</button><button class="btn" onclick="calcSubmit()">答える</button></div>`}`;
@@ -1253,7 +1329,7 @@ function renderKResult(keep){
               <div><div class="muted">正しい字</div><div class="kbig">${esc(q.w)}</div><div class="muted">${esc(q.r)}</div></div></div>
             ${r.img&&!K.fin?`<div class="row"><button class="btn ${r.ok===0?"ng":"ghost"}" onclick="kMark(${k},0)">❌ まちがえた</button><button class="btn ${r.ok===1?"ok":"ghost"}" onclick="kMark(${k},1)">⭕ 書けた</button></div>`:""}
             ${strokeBtn(q)}`}
-        ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}</div>`; }).join("")}
+        ${q.ex?`<div class="ex">💡 ${esc(q.ex).replace(/\n/g,"<br>")}</div>`:""}</div>`; }).join("")}
     ${K.fin?"":`<button class="btn" ${pend?"disabled":""} onclick="finishKTest()">${pend?`あと${pend}問 ○×をつけてね`:"完了 ▶"}</button>`}`;
   if(keep) window.scrollTo(0,y);
 }
@@ -1606,6 +1682,7 @@ function dbgTap(){
 let MOMLIST=[], MOMSHOW="todo";
 async function renderMom(){
   const all=(await chkAll()).filter(r=>r.prof===PROF.cur).sort((a,b)=>b.ts-a.ts);
+  if(location.hash!=="#mom") return;   // 読み込み中にほかの画面へ移っていたら描かない
   MOMLIST = MOMSHOW==="todo" ? all.filter(r=>!r.mom) : all.slice(0,60);
   const todo=all.filter(r=>!r.mom).length;
   const selfLbl={ok:"⭕ 自分で○", ng:"❌ 自分で×", unsure:"🤔 自信なし", trace:"🔺 なぞって正解"};
@@ -1856,7 +1933,7 @@ function renderResult(){
         ${r.note?`<div class="ex" style="color:var(--star)">✏️ ${esc(r.note)}</div>`:""}${q.type==="calc"?`<div class="ex" style="white-space:pre-wrap">${esc(q.calc.steps)}</div>`:""}
         ${r.self?`<div class="muted" style="margin-top:8px">書けたポイントにチェック（点数に反映）</div>
           ${q.points.map((p,pi)=>`<label class="check"><input type="checkbox" ${r.checks[pi]?"checked":""} onchange="wCheck(${k},${pi},this.checked)"><span>${esc(p)}</span></label>`).join("")}`:""}
-        ${q.ex?`<div class="ex">💡 ${esc(q.ex)}</div>`:""}${exCard(q)}</div>`;}).join("")}
+        ${q.ex?`<div class="ex">💡 ${esc(q.ex).replace(/\n/g,"<br>")}</div>`:""}${exCard(q)}</div>`;}).join("")}
     <button class="btn" onclick="finishTest()">完了 ▶</button>`;
 }
 function finishTest(){ test.list.forEach((q,k)=>{ if(q.type==="write") grade(q, test.res[k].ok>=0.6, false, {unsure:test.uns[k], fmt:q.fmt}); }); test=null; go("#home"); }
