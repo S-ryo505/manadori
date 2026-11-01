@@ -265,6 +265,14 @@ body.kid .choice{font-size:20px;min-height:62px}
 .subjcard:active{transform:scale(.98)}
 .subjcard .sic{width:64px;height:64px;border-radius:22px;display:grid;place-items:center;font-size:32px;flex:none;color:#fff}
 .subjcard .st{flex:1;min-width:0}
+.subjcard .pstat{font-size:12px;font-weight:700;color:var(--sub);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plancard .ph{display:flex;gap:10px;align-items:flex-start}
+.plancard .pi{font-size:28px;line-height:1}
+.plancard.good{border-left:6px solid #3CB878}.plancard.push{border-left:6px solid #F2A33A}.plancard.fix{border-left:6px solid #6C8CE8}.plancard.final{border-left:6px solid #E8607A}.plancard.info{border-left:6px solid #B9B2C8}
+.pbars{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.pb{display:grid;grid-template-columns:3.2em 1fr auto;gap:8px;align-items:center;font-size:13px}
+.pb .bar{margin:0}
+.dby{margin-top:10px}.dby .dn{font-weight:700;font-size:14px}.dby .seg{margin-top:4px}.dby .dnd{font-size:12.5px;margin-top:4px}
 .subjcard .sn{font-size:21px;font-weight:700}
 .subjcard .go{font-size:13px;font-weight:700;padding:6px 12px;border-radius:999px;color:#fff;white-space:nowrap}
 .subjcard.soon{opacity:.62}
@@ -288,7 +296,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.9.0";
+const APP_VER = "1.10.0";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -319,7 +327,7 @@ const MIX_LABEL = {few:"少なめ", mid:"ふつう", many:"多め"};
 function defaults(pid){
   const kid = (typeof PROF!=="undefined") && (pid ? ((PROF.list.find(p=>p.id===pid)||{}).level==="小学") : isKid());
   return { prog:{}, days:{}, tests:[], ui:{subj:""},
-    settings:{ examDate:"", newPerDay: kid?10:15, sessionMax: kid?20:30, answerMode:"type", requireWrite:true, mix:{社会:"many", 英語:"mid", 理科:"mid"} } };
+    settings:{ examDate:"", daily: kid?10:15, newPerDay: kid?10:15, sessionMax: kid?20:30, answerMode:"type", requireWrite:true, mix:{社会:"many", 英語:"mid", 理科:"mid"} } };
 }
 let DB = defaults();
 let LEGACY_SETS = null;
@@ -909,18 +917,108 @@ async function pickWho(id){
 }
 
 /* ---------- トップページ ---------- */
-function dailyPlan(subj){
-  const t=today(), qs=allQ(subj);
-  const due=qs.filter(q=>{const p=prog(q.id);return p&&p.box>=1&&p.due<=t;})
-              .sort((a,b)=>prog(a.id).due.localeCompare(prog(b.id).due)||boxOf(a.id)-boxOf(b.id));
-  const max=DB.settings.sessionMax, dueSel=due.slice(0,max);
-  const d=DB.days[t], doneNew=(d&&d.subj&&d.subj[subj]&&d.subj[subj].nw)||0;
-  const newSlots=Math.max(0, Math.min(DB.settings.newPerDay-doneNew, max-dueSel.length));
-  const bySet={}; qs.filter(q=>!prog(q.id)).sort((a,b)=>(b.miss?1:0)-(a.miss?1:0)).forEach(q=>(bySet[q.setId] ||= []).push(q));   // ドリルでまちがえた言葉を先に
-  const lists=Object.values(bySet), fresh=[];
-  for(let k=0; fresh.length<newSlots && lists.some(l=>l.length); k++){ const l=lists[k%lists.length]; if(l.length) fresh.push(l.shift()); }
-  return {due:dueSel, fresh};
+/* ============================================================
+   今日の学習の計画（テストの日から逆算）
+   ・設定するのは「1日の問題数（基本）」だけ
+   ・テストの3日前までに範囲を全部1回解けるように、新しい問題の数を毎日計算
+   ・まちがい・自信なしの問題を優先。進みが遅い／まちがいが多いときは、基本の最大1.6倍まで増やす
+   ・テスト3日前からは新しい問題はお休みして、復習（総ざらい）
+   ・その日の分は、その日の最初に1回だけ決めて固定（解いている途中で増えたりしない）
+   ============================================================ */
+const FINAL_DAYS = 3, BOOST = 1.6;
+function baseDaily(subj){ const by=DB.settings.dailyBy||{}; return (subj&&by[subj]) || DB.settings.daily || (isKid()?10:15); }   // 教科ごとに変えられる
+/* この範囲をテストまでに定着させる目安（1日あたり）：新しい問題のペース ÷ 0.55（残りは復習） */
+function needDaily(subj){ const dte=daysToExam(); if(dte===null||dte<=FINAL_DAYS) return null; const left=allQ(subj).filter(q=>!prog(q.id)).length; if(!left) return null;
+  return Math.ceil(Math.ceil(left/(dte-FINAL_DAYS))/0.55/5)*5; }
+function isWeak(q){ const p=prog(q.id); return !!p && p.box<=1; }          // まちがえた・自信なし（まだ覚えていない）
+function planCalc(subj){
+  const t=today(), qs=allQ(subj), base=baseDaily(subj), cap=Math.ceil(base*BOOST), dte=daysToExam();
+  const fresh=qs.filter(q=>!prog(q.id)).sort((a,b)=>(b.star?1:0)-(a.star?1:0) || (b.miss?1:0)-(a.miss?1:0));   // ★マーカー（大事な問題）から先に
+  const due=qs.filter(q=>{const p=prog(q.id); return p&&p.box>=1&&p.due<=t;})
+    .sort((a,b)=>(isWeak(b)?1:0)-(isWeak(a)?1:0) || prog(a.id).due.localeCompare(prog(b.id).due) || boxOf(a.id)-boxOf(b.id));
+  const weakDue=due.filter(isWeak).length;
+  let mode, needNew;
+  if(dte!==null && dte>FINAL_DAYS){ mode="pace"; needNew=Math.ceil(fresh.length/(dte-FINAL_DAYS)); }
+  else if(dte!==null && dte>=0){ mode="final"; needNew=fresh.length; }
+  else { mode="free"; needNew=Math.min(fresh.length, Math.ceil(base*0.6)); }
+  const behind = mode==="pace" && needNew > Math.ceil(base*0.55);   // 新しい問題のペースが基本に入りきらない
+  const lowFix = weakDue > base*0.8;                                 // まちがえた問題がたまっている
+  let total = base;                                                  // 増やすのは必要な分だけ（最大1.6倍）
+  if(behind) total = Math.max(total, Math.ceil(needNew/0.55));
+  if(lowFix) total += Math.ceil(base*0.3);
+  if(mode==="final") total = Math.ceil(base*1.3);                   // 直前は復習中心。模擬テストの時間も残す
+  total = Math.min(cap, total);
+  let rev, nw;
+  if(mode==="final"){ rev=Math.min(due.length, total); nw=Math.min(fresh.length, total-rev); }
+  else{
+    rev=Math.min(due.length, Math.max(Math.ceil(total*0.45), total-needNew));   // 復習は少なくとも45%（覚えるための時間）
+    nw=Math.min(fresh.length, total-rev);
+    if(rev+nw<total) rev=Math.min(due.length, total-nw);                        // 新しい問題が残っていなければ復習で埋める
+  }
+  // 範囲に対して1日の数が足りるか（新しい問題1問につき、テストまでに復習が約3回いる）
+  const needBase = mode==="pace" ? Math.ceil(needNew/0.55) : base;
+  const dueSel=due.slice(0,rev), freshSel=pickFresh(fresh, nw);
+  return {date:t, base, mode, dte, needNew, needBase, weakDue, lowFix, behind, freshLeft:fresh.length, dueAll:due.length,
+          due:dueSel.map(q=>q.id), fresh:freshSel.map(q=>q.id), total:rev+nw};
 }
+function pickFresh(fresh, n){   // 単元（ファイル）ごとに交互に
+  const bySet={}; fresh.forEach(q=>(bySet[q.setId] ||= []).push(q));
+  const lists=Object.values(bySet), out=[];
+  for(let k=0; out.length<n && lists.some(l=>l.length); k++){ const l=lists[k%lists.length]; if(l.length) out.push(l.shift()); }
+  return out;
+}
+function planOf(subj){
+  DB.plan ||= {};
+  let p=DB.plan[subj];
+  if(!p || p.date!==today() || p.v!==3){ p=Object.assign(planCalc(subj),{v:3}); DB.plan[subj]=p; try{ localStorage.setItem(profKey(PROF.cur), JSON.stringify(DB)); }catch(e){} }
+  return p;
+}
+function resetPlans(){ DB.plan={}; }
+function dailyPlan(subj){
+  const p=planOf(subj), t=today(), byId={}; allQ(subj).forEach(q=>byId[q.id]=q);
+  const left=id=>{ const q=byId[id], r=prog(id); return q && !(r && r.last===t); };   // 今日もう解いた問題は外す
+  return {due:p.due.filter(left).map(id=>byId[id]), fresh:p.fresh.filter(left).map(id=>byId[id]), plan:p};
+}
+/* 計画に対する今の状況（はげます言い方で） */
+function planStatus(subj){
+  const qs=allQ(subj), p=planOf(subj), tot=qs.length||1;
+  const touched=qs.filter(q=>prog(q.id)).length, fixed=qs.filter(q=>boxOf(q.id)>=3).length, weak=qs.filter(isWeak).length;
+  const md=s=>{ const [,m,d]=s.split("-"); return (+m)+"/"+(+d); };
+  const goal=p.dte!==null&&p.dte>FINAL_DAYS ? addDays(today(), p.dte-FINAL_DAYS-1) : null;
+  const perDay=Math.max(1, p.fresh.length), finish=p.freshLeft ? addDays(today(), Math.ceil(p.freshLeft/perDay)-1) : null;
+  let icon, head, sub, tone;
+  if(p.mode==="final"){
+    icon="🏁"; tone="final"; head = p.dte===0 ? "テスト当日！がんばってね" : `テストまであと${p.dte}日。総ざらいの時間！`;
+    sub = p.freshLeft ? `まだ解いていない問題が${p.freshLeft}問あるので、今日は少し入れているよ。まちがえた問題を中心に、くり返し解こう`
+                      : "新しい問題はお休み。まちがえた問題・自信のない問題をくり返して、点数につなげよう";
+  } else if(!p.freshLeft){
+    icon="🎉"; tone="good"; head="範囲を全部1回解いた！"; sub = weak ? `あとは まだ覚えていない${weak}問を定着させるだけ` : "あとは忘れないように、ときどき復習しよう";
+  } else if(p.behind){
+    icon="💪"; tone="push"; head=`がんばりどき！今日は${p.total}問`;
+    sub=`テスト${FINAL_DAYS}日前（${md(goal)}）までに全部1回解けるように、今日は少し多めにしているよ。大事な問題（★）から順に出しているから安心してね`;
+  } else if(p.lowFix){
+    icon="🔁"; tone="fix"; head="まちがえた問題を多めにしているよ";
+    sub=`まだ覚えていない問題が${weak}問。ここを覚えると点数がいちばん伸びるところ！`;
+  } else if(p.mode==="pace"){
+    icon="🌟"; tone="good"; head="順調！このペースでOK";
+    sub=`このまま続けると ${md(finish)} に範囲を全部1回解き終わるよ（目標は${md(goal)}）`;
+  } else {
+    icon="📅"; tone="info"; head="テストの日を入れると、ペースを計算するよ"; sub="「設定」→「テストの日」に入れてね";
+  }
+  const nd=needDaily(subj), hint = nd && nd>baseDaily(subj)+2 ? `👪 おうちの人へ：この範囲をテストまでに定着させる目安は1日${nd}問です（今は${baseDaily(subj)}問）。設定の「教科ごとに変える」で増やせます。` : "";
+  return {icon, head, sub, tone, touched, fixed, weak, tot, hint};
+}
+function planCard(subj){
+  const s=planStatus(subj), pct=x=>Math.round(x/s.tot*100);
+  return `<div class="card plancard ${s.tone}"><div class="ph"><span class="pi">${s.icon}</span><div><b>${esc(s.head)}</b><div class="muted">${esc(s.sub)}</div></div></div>
+    <div class="pbars">
+      <div class="pb"><span>1回目</span><div class="bar"><i style="width:${pct(s.touched)}%;background:var(--pri)"></i></div><b>${s.touched}/${s.tot}</b></div>
+      <div class="pb"><span>定着</span><div class="bar"><i style="width:${pct(s.fixed)}%;background:var(--ok)"></i></div><b>${s.fixed}/${s.tot}</b></div>
+    </div>
+    <p class="hint" style="margin:6px 0 0">「定着」＝ 何日か空けても続けて正解できた問題。${s.weak?`まだ覚えていない問題：${s.weak}問`:""}</p>
+    ${s.hint?`<p class="hint" style="margin:6px 0 0">${esc(s.hint)}</p>`:""}</div>`;
+}
+
 function streak(){ let s=0, d=today(); if(!(DB.days[d]&&DB.days[d].n)) d=addDays(d,-1); while(DB.days[d]&&DB.days[d].n){ s++; d=addDays(d,-1); } return s; }
 function greeting(){ const h=new Date().getHours(); return h<5?"夜ふかしさん、おつかれさま！":h<10?"おはよう！":h<17?"こんにちは！":"おつかれさま！"; }
 function renderTop(){
@@ -938,6 +1036,7 @@ function renderTop(){
       <span class="sic" style="background:linear-gradient(135deg,${t.g1},${t.g2})">${t.icon}</span>
       <span class="st"><span class="sn">${esc(s)}</span>
         <div class="muted">${[...new Set(qs.map(q=>q.unit))].map(esc).join("・")}</div>
+        <div class="pstat">${(st=>st.icon+" "+esc(st.head))(planStatus(s))}</div>
         <div class="bar" style="margin-top:6px"><i style="width:${L.lv[2]/tot*100}%;background:${t.c}"></i><i style="width:${L.lv[1]/tot*100}%;background:${t.g1};opacity:.55"></i></div></span>
       <span class="go" style="background:${n?t.c:"#C9C0CC"}">${n?`今日 ${n}問`:"完了 ✓"}</span></button>`;
   }).join("");
@@ -970,13 +1069,14 @@ function renderHome(){
         <button class="btn" onclick="go('#settings')">問題データを読み込む</button></div>`
     : `<div class="card hero">${doriSVG(n?"normal":"cheer",84)}<div class="heroin">
         <div class="muted">今日の${esc(SUBJ)}</div>
-        ${n?`<div class="big">${n}問</div><div class="muted">復習 ${plan.due.length}問 ＋ 新しい問題 ${plan.fresh.length}問</div>`
+        ${n?`<div class="big">${n}問</div><div class="muted">復習 ${plan.due.length}問${plan.due.filter(isWeak).length?`（まちがえた問題 ${plan.due.filter(isWeak).length}）`:""} ＋ 新しい問題 ${plan.fresh.length}問</div>`
            :`<div class="big">今日の分は完了！</div><div class="muted">今日は${ds.n}問・正解${ds.c}問</div>`}</div>
         ${n?`<button class="btn" onclick="startDaily()">スタート ▶</button>`:`<button class="btn" onclick="go('#units')">単元練習でもっとやる</button>`}</div>`;
   const miss=Object.keys(SETS).filter(id=>SETS[id].subject===SUBJ && missingImg(id));
   app().innerHTML=`${topbar(`<span>${t.icon}</span>${esc(SUBJ)}`,"#top",true)}
     ${miss.length?`<div class="card warn">⚠️ <b>図・写真のデータが入っていません</b><br><span class="muted">「設定」→「ファイルから読み込む」で、${esc(miss.map(id=>SETS[id].unit).join("・"))}の問題ファイルを読み込み直してね。記録は消えません。</span></div>`:""}
     ${hero}
+    ${qs.length?planCard(SUBJ):""}
     <div class="grid3 ${SUBJ==="漢字"?"grid4":""}">
       <button class="tile" onclick="go('#units')"><span class="ic">📖</span><b>単元練習</b></button>
       ${SUBJ==="漢字" ? `<button class="tile" onclick="go('#ktest-setup')"><span class="ic">📝</span><b>50問テスト</b></button><button class="tile" onclick="go('#mom')"><span class="ic">👩</span><b>おうちの人チェック${PENDING?`（${PENDING}）`:""}</b></button>`
@@ -2005,11 +2105,19 @@ function renderSettings(){
       <p class="hint">同じ単元のデータを読み込み直すと、問題は新しくなり、学習記録はそのまま残ります。</p></div>
     <h2>テストと学習量</h2>
     <div class="card"><b>テストの日</b>
-      <input type="date" class="field" value="${esc(S.examDate)}" onchange="DB.settings.examDate=this.value;save();toast('テストの日を保存しました')">
-      <div class="spacer"></div><b>1日の新しい問題の数（教科ごと）</b>
-      <div class="seg">${[5,10,15,20,30].map(n=>`<button class="${S.newPerDay===n?"on":""}" onclick="DB.settings.newPerDay=${n};save();renderSettings()">${n}問</button>`).join("")}</div>
-      <div class="spacer"></div><b>1回の最大問題数</b>
-      <div class="seg">${[20,30,40,60].map(n=>`<button class="${S.sessionMax===n?"on":""}" onclick="DB.settings.sessionMax=${n};save();renderSettings()">${n}問</button>`).join("")}</div></div>
+      <input type="date" class="field" value="${esc(S.examDate)}" onchange="DB.settings.examDate=this.value;resetPlans();save();toast('テストの日を保存しました。今日の計画を立て直しました')">
+      <div class="spacer"></div><b>1日の問題数（教科ごと・基本）</b>
+      <div class="seg">${[10,15,20,25,30].map(n=>`<button class="${baseDaily()===n?"on":""}" onclick="DB.settings.daily=${n};resetPlans();save();renderSettings()">${n}問</button>`).join("")}</div>
+      ${subjectsAll().filter(x=>allQ(x).length).length?`<div class="spacer"></div><b>教科ごとに変える</b>
+      ${subjectsAll().filter(x=>allQ(x).length).map(x=>{ const nd=needDaily(x), cur=(DB.settings.dailyBy||{})[x]||0;
+        return `<div class="dby"><span class="dn">${esc(x)}</span><div class="seg">${[0,15,20,25,30].map(n=>`<button class="${cur===n?"on":""}" onclick="(DB.settings.dailyBy ||= {})['${x}']=${n};resetPlans();save();renderSettings()">${n?n+"問":"基本"}</button>`).join("")}</div>
+          ${nd?`<div class="muted dnd">テストまでに定着させる目安：1日 <b>${nd}問</b>${nd>baseDaily(x)?`（今は${baseDaily(x)}問）`:" ✓"}</div>`:""}</div>`; }).join("")}`:""}
+      <p class="hint" style="margin-bottom:0">テストの日を入れると、<b>テスト${FINAL_DAYS}日前までに範囲を全部1回解ける</b>ように、新しい問題と復習の数を毎日自動で決めます。<br>
+        ・まちがえた問題・自信なしの問題を優先して出します<br>
+        ・進みが遅いときや、まちがいがたまっているときは、その教科の数の最大${BOOST}倍まで自動で増やします<br>
+        ・「目安」は、新しい問題を1回解いたあと、テストまでに3回くらい復習できる量です。目安より少ないと、範囲は1回終わっても覚えきれないことがあります<br>
+        ・テスト${FINAL_DAYS}日前からは、新しい問題はお休みして総ざらいにします<br>
+        ・その日の問題数は、その日の最初に決まり、途中で増えません</p></div>
     ${syncCardHTML()}
     <h2>記録のバックアップ</h2>
     <div class="card"><p class="muted" style="margin-top:0">スマホの「サイトのデータを削除」をすると記録が消えます。ときどき書き出しておくと安心です。</p>
@@ -2037,16 +2145,17 @@ async function importText(text, kind){
   const isNew=!SETS[d.set];
   delete SYNC.del[d.set]; saveSync();
   await putSet(d.set,{u:Date.now(), subject:d.subject||"", unit:d.unit||d.set, level:d.level||"中学", source:d.source||"", version:d.version||1, lang:d.lang||"", images:d.images||null, audio:d.audio||null, strokes:d.strokes||null, credits:d.credits||"", questions:d.questions});
+  resetPlans(); save(true);
   toast(`${d.subject}・${d.unit}：${d.questions.length}問を${isNew?"読み込み":"更新し"}ました`); renderSettings();
 }
 async function delSet(id){ if(!confirm("この単元の問題を削除しますか？（学習記録も消えます）")) return;
-  const s=SETS[id]; if(s) s.questions.forEach(q=>delete DB.prog[q.id]); delete SETS[id]; await idbDel(id); SYNC.del[id]=Date.now(); saveSync(); save(); renderSettings(); }
+  const s=SETS[id]; if(s) s.questions.forEach(q=>delete DB.prog[q.id]); delete SETS[id]; await idbDel(id); SYNC.del[id]=Date.now(); saveSync(); resetPlans(); save(); renderSettings(); }
 function exportBackup(){
   const blob=new Blob([JSON.stringify({format:"manadori-backup", ver:APP_VER, saved:new Date().toISOString(), db:DB, sets:SETS})],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`manadori-backup-${today()}.json`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); toast("書き出しました（ダウンロードフォルダ）");
 }
-function resetProgress(){ if(!confirm("学習記録と模擬テストの記録を消します。問題データは残ります。よろしいですか？")) return; DB.prog={}; DB.days={}; DB.dd={}; DB.tests=[]; DB.epoch=Date.now(); save(); toast("記録をリセットしました"); renderSettings(); }
+function resetProgress(){ if(!confirm("学習記録と模擬テストの記録を消します。問題データは残ります。よろしいですか？")) return; DB.prog={}; DB.days={}; DB.dd={}; DB.tests=[]; DB.epoch=Date.now(); resetPlans(); save(); toast("記録をリセットしました"); renderSettings(); }
 
 /* ============================================================
    端末どうしの同期（Googleドライブ ＋ Apps Script）
