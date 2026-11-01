@@ -265,6 +265,8 @@ body.kid .choice{font-size:20px;min-height:62px}
 .subjcard:active{transform:scale(.98)}
 .subjcard .sic{width:64px;height:64px;border-radius:22px;display:grid;place-items:center;font-size:32px;flex:none;color:#fff}
 .subjcard .st{flex:1;min-width:0}
+#sbx{position:fixed;left:0;right:0;top:0;z-index:80;background:#3A3140;color:#FFE27A;font-size:12px;font-weight:700;text-align:center;padding:3px 0 calc(3px + 0px);letter-spacing:.05em}
+body.sandbox #app{padding-top:22px}
 .subjcard .pstat{font-size:12px;font-weight:700;color:var(--sub);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .plancard .ph{display:flex;gap:10px;align-items:flex-start}
 .plancard .pi{font-size:28px;line-height:1}
@@ -296,7 +298,7 @@ body.kid .choice{font-size:20px;min-height:62px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.11.0";
+const APP_VER = "1.12.0";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -348,8 +350,18 @@ function load(){
   }catch(e){ console.warn(e); }
   ensureSync(DB);
 }
+/* おためしモード：お父さんが試すとき用。記録は端末に保存せず、同期もしない。終わると元の記録にもどる */
+function isSandbox(){ try{ return localStorage.getItem("manadori:sandbox")==="1"; }catch(e){ return false; } }
+let SB_CHK={add:[], put:{}, del:{}};
+function setSandbox(on){
+  if(on){ if(!confirm("おためしモードにしますか？\n\n・ここから先に解いた問題・テスト・手書き・ゲームの結果は、保存も同期もされません\n・おためしモードを終えると、今の記録にそのまま戻ります\n・問題データの読み込み・削除だけは、ふだんどおり保存されます")) return;
+    save(true); try{ localStorage.setItem("manadori:sandbox","1"); }catch(e){} toast("🧪 おためしモードにしました（記録されません）"); }
+  else{ try{ localStorage.removeItem("manadori:sandbox"); }catch(e){} SB_CHK={add:[], put:{}, del:{}}; load(); refreshPending(); toast("おためしモードを終えて、元の記録に戻しました"); syncSoon(1500); }
+  route();
+}
 function save(noSync){
   recomputeDays(DB);
+  if(isSandbox()) return;   // おためし中は保存しない
   const h=hashStr(JSON.stringify(DB.settings)); if(DB._setH!=null && h!==DB._setH) DB.settingsU=Date.now(); DB._setH=h;   // 設定を変えた時刻（同期用）
   try{ localStorage.setItem(profKey(PROF.cur), JSON.stringify(DB)); }catch(e){ toast("記録を保存できませんでした"); }
   if(!noSync) syncSoon();
@@ -362,12 +374,16 @@ function idbOpen(){ return new Promise(res=>{ try{ const r=indexedDB.open("manad
     if(!db.objectStoreNames.contains("checks")) db.createObjectStore("checks",{keyPath:"k", autoIncrement:true}); };
   r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); r.onblocked=()=>res(null); }catch(e){ res(null); } }); }
 /* 手書きの答え（おうちの人チェック用） */
-function chkAdd(rec){ rec.id ||= newId(); syncSoon(); return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(null); const tx=idb.transaction("checks","readwrite"); const rq=tx.objectStore("checks").add(rec);
+function chkAdd(rec){ rec.id ||= newId();
+  if(isSandbox()){ const k=-(SB_CHK.add.length+1); SB_CHK.add.push(Object.assign({},rec,{k})); return Promise.resolve(k); }
+  syncSoon(); return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(null); const tx=idb.transaction("checks","readwrite"); const rq=tx.objectStore("checks").add(rec);
   rq.onsuccess=()=>res(rq.result); tx.onerror=()=>res(null); }); }
-function chkPut(rec){ syncSoon(); return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").put(rec); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
-function chkAll(){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res([]); const out=[], c=idb.transaction("checks","readonly").objectStore("checks").openCursor();
+function chkPut(rec){ if(isSandbox()){ if(rec.k<0){ const i=SB_CHK.add.findIndex(r=>r.k===rec.k); if(i>=0) SB_CHK.add[i]=Object.assign({},rec); } else SB_CHK.put[rec.k]=Object.assign({},rec); return Promise.resolve(true); }
+  syncSoon(); return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").put(rec); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
+function chkAll(){ return chkAllRaw().then(all=>!isSandbox()?all:all.filter(r=>!SB_CHK.del[r.k]).map(r=>SB_CHK.put[r.k]||r).concat(SB_CHK.add.filter(r=>!SB_CHK.del[r.k]))); }
+function chkAllRaw(){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res([]); const out=[], c=idb.transaction("checks","readonly").objectStore("checks").openCursor();
   c.onsuccess=()=>{ const cur=c.result; if(cur){ out.push(cur.value); cur.continue(); } else res(out); }; c.onerror=()=>res(out); }); }
-function chkDel(k){ return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").delete(k); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
+function chkDel(k){ if(isSandbox()){ SB_CHK.del[k]=true; return Promise.resolve(true); } return new Promise(res=>{ if(!idb||!idb.objectStoreNames.contains("checks")) return res(false); const tx=idb.transaction("checks","readwrite"); tx.objectStore("checks").delete(k); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }
 let PENDING=0;
 async function refreshPending(){ const all=await chkAll(); PENDING=all.filter(r=>r.prof===PROF.cur && !r.mom).length; return PENDING; }
 function idbAll(){ return new Promise(res=>{ if(!idb) return res({}); const out={}, c=idb.transaction("sets","readonly").objectStore("sets").openCursor();
@@ -874,6 +890,8 @@ window.addEventListener("hashchange", ()=>{
 });
 function route(){
   window.scrollTo(0,0); stopAll();
+  document.body.classList.toggle("sandbox", isSandbox());
+  let sb=document.getElementById("sbx"); if(isSandbox() && !sb){ sb=document.createElement("div"); sb.id="sbx"; sb.innerHTML="🧪 おためしモード（記録・同期しません）"; sb.onclick=()=>go("#settings"); document.body.appendChild(sb); } else if(!isSandbox() && sb) sb.remove();
   const h=location.hash||"#top";
   if(h!=="#game"){ if(GZ){ clearInterval(GZ.tm); GZ=null; } document.querySelectorAll(".gintro,.gclear").forEach(x=>x.remove()); }
   if(h==="#game"){ applyTheme(null); document.body.classList.toggle("kid", isKid()); return renderGame(); }
@@ -914,6 +932,7 @@ async function pickWho(id){
   PROF.cur=id; saveProfiles(); load(); SUBJ = DB.ui.subj && subjectsAll().includes(DB.ui.subj) ? DB.ui.subj : "";
   try{ sessionStorage.setItem("manadori:who","1"); }catch(e){}
   await refreshPending(); tsel=null; session=null; go("#top");
+  if(syncOn()){ toast("☁️ "+curProf().name+"の最新の記録を確認しています…"); syncNow({only:[id]}).then(c=>{ if(c) toast("☁️ ほかの端末の記録を受け取りました"); }); }   // ほかの端末でやった分をすぐ受け取る
 }
 
 /* ---------- トップページ ---------- */
@@ -970,7 +989,7 @@ function pickFresh(fresh, n){   // 単元（ファイル）ごとに交互に
 function planOf(subj){
   DB.plan ||= {};
   let p=DB.plan[subj];
-  if(!p || p.date!==today() || p.v!==3){ p=Object.assign(planCalc(subj),{v:3}); DB.plan[subj]=p; try{ localStorage.setItem(profKey(PROF.cur), JSON.stringify(DB)); }catch(e){} }
+  if(!p || p.date!==today() || p.v!==3){ p=Object.assign(planCalc(subj),{v:3, made:Date.now()}); DB.plan[subj]=p; if(!isSandbox()){ try{ localStorage.setItem(profKey(PROF.cur), JSON.stringify(DB)); }catch(e){} } }
   return p;
 }
 function resetPlans(){ DB.plan={}; }
@@ -2124,9 +2143,13 @@ function renderSettings(){
       <button class="btn sub" onclick="exportBackup()">バックアップを書き出す</button><div class="spacer"></div>
       <label class="btn ghost">バックアップから戻す<input type="file" accept=".json,application/json" style="display:none" onchange="importFile(this.files[0],'backup')"></label>
       <div class="spacer"></div><button class="btn ghost" style="color:var(--ng)" onclick="resetProgress()">学習記録だけリセット</button></div>
-    ${isDebug()?`<h2>🛠 デバッグ</h2><div class="card"><button class="btn" onclick="GRET='#settings';go('#game')">🎮 ${esc(gameInfo().name)}をためす</button>
-      <p class="muted" style="margin-bottom:0">デバッグ中はノルマなしで何回でも遊べます（ダイヤは記録されません）。このボタンはデバッグ中だけ表示されます。</p></div>`:""}
-    <p class="muted" style="text-align:center;user-select:none" onclick="dbgTap()">まなドリ v${APP_VER}${isDebug()?'<span class="dbgbadge">🛠 デバッグ</span>':""}　${syncOn()?"記録はこの端末と、つないだGoogleドライブに保存されます":"データはこの端末の中にだけ保存されます"}</p>`;
+    ${isDebug()||isSandbox()?`<h2>🛠 デバッグ</h2><div class="card">
+      <b>🧪 おためしモード</b>
+      <p class="muted" style="margin-top:4px">オンにすると、解いた問題・テスト・手書き・ゲームの結果を<b>保存も同期もしません</b>。オフにすると、オンにする前の記録にそのまま戻ります。アプリを閉じてもオンのままです（画面の上に帯が出ます）。</p>
+      ${isSandbox()?`<button class="btn" style="background:#3A3140" onclick="setSandbox(false)">おためしモードを終える（元の記録に戻す）</button>`:`<button class="btn sub" onclick="setSandbox(true)">🧪 おためしモードにする</button>`}
+      <div class="spacer"></div><button class="btn ghost" onclick="GRET='#settings';go('#game')">🎮 ${esc(gameInfo().name)}をためす</button>
+      <p class="muted" style="margin-bottom:0">デバッグ中はノルマなしで何回でも遊べます（ダイヤは記録されません）。このカードはデバッグ中だけ表示されます。</p></div>`:""}
+    <p class="muted" style="text-align:center;user-select:none" onclick="dbgTap()">まなドリ v${APP_VER}${isDebug()?'<span class="dbgbadge">🛠 デバッグ</span>':""}　${isSandbox()?"🧪 おためしモード中：記録は保存されません":syncOn()?"記録はこの端末と、つないだ保存先に保存されます":"データはこの端末の中にだけ保存されます"}</p>`;
 }
 function importFile(file, kind){ if(!file) return; const r=new FileReader(); r.onload=()=>importText(String(r.result),kind); r.onerror=()=>toast("ファイルを読めませんでした"); r.readAsText(file,"utf-8"); }
 async function putSet(id,s){ SETS[id]=s; delete POOL_CACHE[id]; const ok=await idbPut(id,s); if(!ok) toast("問題データを端末に保存できませんでした"); return ok; }
@@ -2207,7 +2230,7 @@ function ensureSync(d){
 function dbPart(d){
   const g=d.game||{};
   return {v:1, epoch:d.epoch||0, prog:d.prog||{}, dd:d.dd||{}, tests:d.tests||[], settings:d.settings||{}, settingsU:d.settingsU||0,
-    game:{log:g.log||[], cleared:g.cleared||[], cur:g.cur||null}};
+    game:{log:g.log||[], cleared:g.cleared||[], cur:g.cur||null}, plan:d.plan||{}};
 }
 function dbIsEmpty(p){ return !Object.keys(p.prog).length && !Object.keys(p.dd).length && !p.tests.length && !p.game.log.length && !p.game.cur && !p.settingsU && !p.epoch; }
 function newerProg(p,q){ const a=p.u||0, b=q.u||0; return a!==b ? a>b : (p.n||0)>(q.n||0); }
@@ -2232,10 +2255,12 @@ function mergeDB(a,b){   // a：この端末、b：ドライブ
   o.tests=Object.values(T).sort((x,y)=>(x.date||"").localeCompare(y.date||"")||(x.u||0)-(y.u||0));
   const sb=(b.settingsU||0)>=(a.settingsU||0) && b.settings && Object.keys(b.settings).length; o.settings=sb?b.settings:a.settings; o.settingsU=Math.max(a.settingsU||0,b.settingsU||0);
   o.game=mergeGame(a.game,b.game);
+  o.plan={};   // 今日の計画：同じ日なら先に作った方（2台で同じ問題を出す）、日がちがえば新しい日
+  for(const s of [a,b]) for(const [k,p] of Object.entries(s.plan||{})){ const q=o.plan[k]; if(!q || p.date>q.date || (p.date===q.date && (p.made||0)<(q.made||0))) o.plan[k]=p; }
   return o;
 }
 function dbApply(d,m){
-  d.epoch=m.epoch; d.prog=m.prog; d.dd=m.dd; d.tests=m.tests; d.settingsU=m.settingsU;
+  d.epoch=m.epoch; d.prog=m.prog; d.dd=m.dd; d.tests=m.tests; d.settingsU=m.settingsU; if(m.plan) d.plan=m.plan;
   if(m.settings){ const def=defaults().settings; d.settings=Object.assign(def, m.settings); d.settings.mix=Object.assign(defaults().settings.mix, m.settings.mix||{}); }
   d._setH=hashStr(JSON.stringify(d.settings));
   const g=d.game || (d.game={gems:{red:0,blue:0,green:0,yellow:0}, last:"", cleared:[], plays:0, cur:null});
@@ -2290,7 +2315,7 @@ function profStore(pid,d){ if(pid===PROF.cur){ save(true); return; } try{ localS
 
 async function syncNow(opt){
   opt=opt||{};
-  if(!syncOn()) return false;
+  if(!syncOn() || isSandbox()) return false;
   if(SYNCING){ SYNC_AGAIN=true; return SYNCING; }
   SYNCING=(async()=>{
     let changed=false, chkChanged=false; SYNC_STATE="busy"; syncBadgeUpdate();
@@ -2301,7 +2326,8 @@ async function syncNow(opt){
       await syncFile("meta", R, ()=>metaPart(), (l,r)=>(r.u||0)>=(l.u||0)?r:l,
         m=>{ if((m.u||0)>=(PROF.u||0) && JSON.stringify(m)!==JSON.stringify(metaPart())){ PROF.momEmail=m.momEmail||""; m.list.forEach(x=>{ const p=PROF.list.find(y=>y.id===x.id); if(p) Object.assign(p,x); else PROF.list.push(x); }); PROF.u=m.u; PROF._h=hashStr(JSON.stringify(metaPart().list)+PROF.momEmail); saveProfiles(true); changed=true; } });
       // 学習記録（人ごと）
-      for(const p of PROF.list){
+      const who=syncWho(opt);   // 同期する人（この端末の設定＋いま使っている人。「だれ？」で選んだ直後はその人だけ）
+      for(const p of PROF.list.filter(x=>who.includes(x.id))){
         await syncFile("db-"+p.id, R, ()=>dbPart(profObj(p.id)), mergeDB,
           m=>{ const d=profObj(p.id), before=hashStr(JSON.stringify(dbPart(d))); dbApply(d,m); if(hashStr(JSON.stringify(dbPart(d)))!==before){ changed=true; } profStore(p.id,d); },
           {skipEmpty:dbIsEmpty});
@@ -2310,8 +2336,8 @@ async function syncNow(opt){
       let all=await chkAll();
       for(const r of all) if(!r.id){ r.id=DEV+"-c"+(r.ts||0).toString(36)+"-"+r.k; await chkPut(r); }
       const since=addDays(today(),-45), names=new Set();
-      all.forEach(r=>{ if(r.prof && r.date>=since) names.add("chk-"+r.prof+"-"+r.date); });
-      Object.keys(R).forEach(n=>{ const m=n.match(/^chk-(\w+)-(\d{4}-\d\d-\d\d)$/); if(m && m[2]>=since) names.add(n); });
+      all.forEach(r=>{ if(r.prof && r.date>=since && who.includes(r.prof)) names.add("chk-"+r.prof+"-"+r.date); });
+      Object.keys(R).forEach(n=>{ const m=n.match(/^chk-(\w+)-(\d{4}-\d\d-\d\d)$/); if(m && m[2]>=since && who.includes(m[1])) names.add(n); });
       const need=[...names].filter(n=>R[n] && R[n]!==SYNC.revs[n]), PRE={};
       for(let i=0;i<need.length;i+=8) Object.assign(PRE, (await api({op:"get", names:need.slice(i,i+8)}, 90000)).files);
       for(const name of names){
@@ -2360,7 +2386,8 @@ async function syncNow(opt){
   })();
   try{ return await SYNCING; }finally{ SYNCING=null; if(SYNC_AGAIN){ SYNC_AGAIN=false; syncSoon(1500); } }
 }
-function syncSoon(ms){ if(!syncOn()) return; clearTimeout(SYNC_TM); SYNC_TM=setTimeout(()=>syncNow(), ms==null?8000:ms); }
+function syncWho(opt){ if(opt&&opt.only) return opt.only; const all=PROF.list.map(p=>p.id), mine=(SYNC.profs&&SYNC.profs.length)?SYNC.profs:all; return [...new Set(mine.concat([PROF.cur]))]; }
+function syncSoon(ms){ if(!syncOn() || isSandbox()) return; clearTimeout(SYNC_TM); SYNC_TM=setTimeout(()=>syncNow(), ms==null?8000:ms); }
 /* ほかの端末の記録が入ったら、落ち着いている画面だけ描き直す */
 function syncRefreshView(){
   const h=location.hash||"#top";
@@ -2484,6 +2511,9 @@ function syncCardHTML(){
     <div class="card"><div id="syncst">${syncStatusHTML()}</div>
       <p class="muted">保存先：${esc(SYNC.ghr||"Googleドライブ")}${syncGh()?"（暗号化あり）":""}<br>この端末で使った記録・まちがえた問題・手書きの字・ダイヤ・問題データは、開いたとき／学習のあと／閉じたときに自動で同期します。</p>
       <button class="btn sub" onclick="syncNow({manual:true}).then(c=>{ if(!SYNC.err) toast(c?'同期しました（新しい記録を受け取りました）':'同期しました'); })">今すぐ同期</button><div class="spacer"></div>
+      <b>この端末で同期する人</b>
+      <div class="seg" style="margin:6px 0 4px">${PROF.list.map(pf=>{ const on=!SYNC.profs||!SYNC.profs.length||SYNC.profs.includes(pf.id); return `<button class="${on?"on":""}" onclick="syncToggleProf('${pf.id}')">${on?"✓ ":""}${esc(pf.name)}</button>`; }).join("")}</div>
+      <p class="hint" style="margin-top:0">中学生と小学生の記録は、べつべつのファイルで同期します。「だれが べんきょうする？」で選んだ人の最新の記録を、その場で受け取ります。ふだん使わない人の記録をこの端末に入れたくないときは、選択をはずしてください（その人が使うときは自動で同期します）。</p>
       <button class="btn ghost" onclick="syncShareLink()">ほかの端末をつなぐリンクを送る</button>
       <p class="hint">リンクには合言葉は入っていません。つなぐ端末で合言葉を入れてください。リンクは家族の外には送らないでください。</p>
       <button class="btn ghost" style="color:var(--ng)" onclick="syncDisconnect()">この端末の同期をやめる</button></div>`;
@@ -2511,6 +2541,9 @@ async function syncConnect(url, key){   // 旧方式（Googleドライブ）。�
   try{ await api({op:"ping"}); }catch(e){ Object.assign(SYNC,old); toast("つなげませんでした："+e.message); return false; }
   saveSync(); await syncNow({manual:true}); if(location.hash==="#settings") renderSettings(); return true;
 }
+function syncToggleProf(id){ const all=PROF.list.map(p=>p.id); let cur=(SYNC.profs&&SYNC.profs.length)?SYNC.profs.slice():all.slice();
+  cur=cur.includes(id)?cur.filter(x=>x!==id):cur.concat(id); if(!cur.length){ toast("だれか1人は選んでください"); return; }
+  SYNC.profs=cur.length===all.length?[]:cur; saveSync(); renderSettings(); }
 function syncDisconnect(){ if(!confirm("この端末の同期をやめますか？（記録はこの端末とGitHubの両方に残ります）")) return;
   Object.assign(SYNC,{url:"", key:"", ghr:"", ght:"", ghk:"", ghb:"", revs:{}, h:{}, err:""}); GH_KEY=null; SYNC_STATE=""; saveSync(); renderSettings(); }
 function syncLink(){ const o=syncGh()?{r:SYNC.ghr, t:SYNC.ght, b:SYNC.ghBase||undefined}:{u:SYNC.url, k:SYNC.key};
