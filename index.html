@@ -298,7 +298,7 @@ body.sandbox #app{padding-top:22px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.12.0";
+const APP_VER = "1.12.1";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -2429,7 +2429,9 @@ async function ghEnc(text){   // → "MD1" + 方式(1byte) + iv(12) + 暗号文
   const out=new Uint8Array(4+12+ct.length); out.set([77,68,49,z]); out.set(iv,4); out.set(ct,16); return out;
 }
 async function ghDec(u8){
-  if(!(u8[0]===77&&u8[1]===68&&u8[2]===49)) throw new Error("同期データの形式がちがいます");
+  if(!(u8[0]===77&&u8[1]===68&&u8[2]===49)){
+    let head=""; try{ head=new TextDecoder().decode(u8.subarray(0,60)).replace(/\s+/g," "); }catch(e){}
+    throw new Error("同期データの形式がちがいます（"+u8.length+"バイト："+head.slice(0,40)+"）"); }
   let pt; try{ pt=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv:u8.subarray(4,16)}, await ghKey(), u8.subarray(16))); }
   catch(e){ throw new Error("合言葉がちがいます（暗号を解けません）"); }
   if(u8[3]===1){ const g=await gzipU8(pt,"d"); if(!g) throw new Error("この端末のブラウザが古いため読めません"); pt=g; }
@@ -2455,11 +2457,14 @@ async function ghList(){
   (j.tree||[]).forEach(e=>{ if(e.type==="blob" && e.path.startsWith(GH_DIR) && e.path.endsWith(".bin")) out[e.path.slice(GH_DIR.length,-4)]=e.sha; });
   return out;
 }
-async function ghRead(name, ms){
-  const r=await ghFetch(ghRepoPath()+"/contents/"+GH_DIR+encodeURIComponent(name)+".bin?ref="+encodeURIComponent(SYNC.ghb||"main"), {headers:{"Accept":"application/vnd.github.raw"}}, ms);
+async function ghRead(name, ms, sha){
+  if(!sha){ sha=(await ghList())[name]; if(!sha) return null; }
+  const r=await ghFetch(ghRepoPath()+"/git/blobs/"+sha, {}, ms);
   if(r.status===404) return null;
   if(!r.ok) throw new Error("読めませんでした（"+r.status+"）");
-  return ghDec(new Uint8Array(await r.arrayBuffer()));
+  const j=await r.json();
+  if(j.encoding!=="base64" || typeof j.content!=="string") throw new Error("読めませんでした（形式："+(j.encoding||"?")+"）");
+  return ghDec(b64d(j.content.replace(/\s/g,"")));
 }
 async function ghWrite(name, base, data, ms){
   const body={message:"sync "+name, content:b64e(await ghEnc(data)), branch:SYNC.ghb||"main"}; if(base) body.sha=base;
@@ -2480,17 +2485,17 @@ async function ghApi(body, ms){
     if(j.permissions && j.permissions.push===false) throw new Error("書きこむ権限がありません（トークンの権限「Contents：Read and write」を確認）");
     // 合言葉の確認：暗号化した目印ファイルを読めるか（なければ作る）
     const L=await ghList();
-    if(L[GH_CHECK]){ const t=await ghRead(GH_CHECK); if(t!=="manadori-ok") throw new Error("合言葉がちがいます"); }
+    if(L[GH_CHECK]){ const t=await ghRead(GH_CHECK, 30000, L[GH_CHECK]); if(t!=="manadori-ok") throw new Error("合言葉がちがいます"); }
     else{ const w=await ghWrite(GH_CHECK, 0, "manadori-ok"); if(!w.ok) throw new Error("最初の保存ができませんでした"); }
     return {ok:true};
   }
   if(body.op==="list") return {ok:true, revs:await ghList()};
   if(body.op==="get"){ const L=await ghList(), files={};
-    for(const n of body.names){ files[n]={rev:L[n]||0, data:L[n]?await ghRead(n, ms):null}; } return {ok:true, files}; }
+    for(const n of body.names){ files[n]={rev:L[n]||0, data:L[n]?await ghRead(n, ms, L[n]):null}; } return {ok:true, files}; }
   if(body.op==="put"){
     const w=await ghWrite(body.name, body.base||0, body.data, ms); if(w.ok) return w;
     const L=await ghList(), rev=L[body.name]||0;
-    return {conflict:true, rev, data: body.nodata||!rev ? null : await ghRead(body.name, ms)};
+    return {conflict:true, rev, data: body.nodata||!rev ? null : await ghRead(body.name, ms, rev)};
   }
   throw new Error("op");
 }
