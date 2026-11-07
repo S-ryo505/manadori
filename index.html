@@ -300,7 +300,7 @@ body.sandbox #app{padding-top:22px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.13.0";
+const APP_VER = "1.14.0";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -322,6 +322,8 @@ const THEMES = {
   理科:{icon:"🧪", c:"#3E9BEA", deep:"#2A7CC6", soft:"#E3F0FD", dsoft:"#21344A", g1:"#6DB6F2", g2:"#86D9CB"},
   漢字:{icon:"✍️", c:"#F27A3D", deep:"#D25A1E", soft:"#FFEBDD", dsoft:"#47301F", g1:"#F8A35E", g2:"#F6C55B"},
   数学:{icon:"📐", c:"#F29A38", deep:"#D27C1D", soft:"#FFF0DD", dsoft:"#47351F", g1:"#F7BA62", g2:"#F59AC0"},
+  "社会・地理":{icon:"🗾", c:"#2FB38C", deep:"#1E8F6D", soft:"#E1F6EE", dsoft:"#1F3A33", g1:"#5ACFA6", g2:"#7CC3EC"},
+  "社会・歴史":{icon:"🏯", c:"#D0832B", deep:"#A8651A", soft:"#FBEFDD", dsoft:"#43331F", g1:"#EBAE5C", g2:"#E58F82"},
   base:{icon:"✏️", c:"#9B7FE6", deep:"#7A5CD0", soft:"#F1ECFD", dsoft:"#352E48", g1:"#B49CF2", g2:"#F3A6C8"},
 };
 const MIXV = {few:.3, mid:.5, many:.65};
@@ -420,19 +422,42 @@ function enNorm(s, exact){
   if(!exact){ for(const [a,b] of CONTR) t=t.replace(new RegExp("(^|\\s)"+a+"(?=\\s|$)","g"),"$1"+b); t=t.replace(/'/g,""); }
   return t.replace(/-/g," ").replace(/\s+/g," ").trim();
 }
-function theme(name){ return THEMES[name]||THEMES.base; }
+function theme(name){ return THEMES[name]||THEMES[skParts(name)[0]]||THEMES.base; }
 function applyTheme(name){
   const t=theme(name), r=document.documentElement.style, dark=matchMedia("(prefers-color-scheme: dark)").matches;
   r.setProperty("--pri",t.c); r.setProperty("--pri-deep",t.deep); r.setProperty("--pri-soft",dark?t.dsoft:t.soft);
   r.setProperty("--grad1",t.g1); r.setProperty("--grad2",t.g2);
 }
 
+/* ---------- 分野（中学の社会は「地理」「歴史」に分けて学習する） ----------
+   学習キー：分けない教科は "英語"、分ける教科は "社会・歴史" のように「教科・分野」
+   ・問題データの "field"（分野）で分ける。進み具合（prog）は問題IDごとなので、分けても記録は変わらない */
+const FIELDS_BY_SUBJ = {中学:{社会:["地理","歴史"]}};
+function skParts(k){ k=k||""; const i=k.indexOf("・"); return i<0?[k,""]:[k.slice(0,i),k.slice(i+1)]; }
+function setField(s){   // 分野が書かれていない古いデータ：社会は名前から推定（これまでの社会は地理のみ）
+  if(s.field) return s.field;
+  if(s.subject!=="社会") return "その他";
+  return /歴史|時代|文明|古墳|縄文|弥生/.test(s.unit||"") ? "歴史" : /公民|憲法|政治|経済/.test(s.unit||"") ? "公民" : "地理";
+}
+function fieldsOf(subj){
+  const lv=curProf().level, base=(FIELDS_BY_SUBJ[lv]||{})[subj]||[], f=new Set(base);
+  Object.values(SETS).forEach(x=>{ if(setLevel(x)===lv && x.subject===subj && (base.length||x.field)) f.add(setField(x)); });
+  return f.size>=2 ? [...f] : [];      // 分野が2つ以上あるときだけ分ける
+}
+function studyKeys(){ return subjectsAll().flatMap(s=>{ const f=fieldsOf(s); return f.length ? f.map(x=>s+"・"+x) : [s]; }); }
+function setMatch(s, k){
+  if(!k) return true;
+  const [subj,f]=skParts(k); if(s.subject!==subj) return false;
+  return !f || setField(s)===f;
+}
+function keyOfQ(q){ const s=SETS[q.setId]; return s && fieldsOf(s.subject).length ? s.subject+"・"+setField(s) : q.subject; }
+
 /* ---------- 問題の一覧 ---------- */
 function allQ(subj){
   const out=[];
   for(const setId of Object.keys(SETS)){
-    const s=SETS[setId]; if(setLevel(s)!==curProf().level) continue; if(subj && s.subject!==subj) continue;
-    s.questions.forEach((q,i)=>out.push(Object.assign({}, q, {setId, subject:s.subject, unit:s.unit, ord:i, secKey:s.unit+"｜"+(q.sec||"")})));
+    const s=SETS[setId]; if(setLevel(s)!==curProf().level) continue; if(!setMatch(s, subj)) continue;
+    s.questions.forEach((q,i)=>out.push(Object.assign({}, q, {setId, subject:s.subject, field:s.field||"", unit:s.unit, ord:i, secKey:s.unit+"｜"+(q.sec||"")})));
   }
   return out;
 }
@@ -441,6 +466,7 @@ function missingImg(setId){ const s=SETS[setId]; return !!s && s.questions.some(
 function imgOf(q){ const s=SETS[q.setId]; return q.img && s && s.images ? s.images[q.img] : null; }
 function prog(id){ return DB.prog[id]; }
 function boxOf(id){ const p=DB.prog[id]; return p?p.box:0; }
+function dayKeys(q){ const k=keyOfQ(q); return k!==q.subject ? [q.subject,k] : [q.subject]; }
 function dayRec(){ const t=today(); DB.dd ||= {}; const m=DB.dd[DEV] ||= {}; const d=m[t] ||= {n:0,c:0,subj:{}}; d.subj ||= {}; d.u=Date.now(); return d; }   // この端末の分。合計は DB.days
 
 /* 採点 → 次の出題日。ex.unsure＝わからない／自信なし（明日もう1回）、ex.fmt＝出題形式 */
@@ -463,7 +489,7 @@ function grade(q, ok, soft, ex){
   if(e && e>t){ const lim=addDays(e,-1); if(due>lim) due = lim>addDays(t,1)?lim:addDays(t,1); }
   p.due=due; p.last=t; p.u=Date.now(); p.hist=(p.hist+(good?"1":"0")).slice(-10); DB.prog[q.id]=p;
   const d=dayRec(); d.n++; if(good) d.c++;
-  const s=d.subj[q.subject]||(d.subj[q.subject]={n:0,c:0,nw:0}); s.n++; if(good) s.c++;
+  for(const k of dayKeys(q)){ const s=d.subj[k]||(d.subj[k]={n:0,c:0,nw:0}); s.n++; if(good) s.c++; }
   save();
 }
 
@@ -558,6 +584,42 @@ Object.assign(GENS, {
       lim=S[T]*W/100, x=Math.round(lim*pick([.7,.9,1.1,1.3,1.6])), left=Math.max(0,r1x(x-lim));
     return {img:S.t, q:`${T}℃ の水 ${W} g に ${nm} を ${x} g 入れてよくかき混ぜた。溶け残るのは何 g か。（全部溶けるなら 0。小数第1位まで）`, ans:left, unit:"g",
       steps:`${T}℃ の水100gに溶けるのは ${S[T]} g${W===100?"":` → 水 ${W} g なら ${S[T]} × ${W} ÷ 100 ＝ ${r1x(lim)} g`}\n${x} g ${x>lim?`− ${r1x(lim)} g ＝ ${left} g が溶け残る`:`は ${r1x(lim)} g 以下なので、全部溶ける → 0 g`}`}; },
+});
+
+/* ---- 社会（歴史）：世紀・干支・年数の問題（毎回年が変わる） ---- */
+const ETO = {kan:["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"], kanY:["きのえ","きのと","ひのえ","ひのと","つちのえ","つちのと","かのえ","かのと","みずのえ","みずのと"],
+  shi:["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"], shiY:["ね","うし","とら","う","たつ","み","うま","ひつじ","さる","とり","いぬ","い"]};
+function seikiOf(y){ return Math.floor((y-1)/100)+1; }            // 紀元後 y年 → 何世紀（紀元前も同じ式：紀元前 y年 → 紀元前 何世紀）
+function rsYear(){ const c=rint(1,21), k=Math.random(); return k<.3 ? c*100 : k<.55 ? (c-1)*100+1 : (c-1)*100+rint(2,99); }   // ちょうど・01年をよく出す
+function etoOf(y){ const m=(n,d)=>((n%d)+d)%d; return {kan:m(y-4,10), shi:m(y-4,12)}; }
+Object.assign(GENS, {
+  rs_seiki(){ const bc=Math.random()<.3, y=bc?rint(1,30)*100-pick([0,0,1,rint(2,98)]):rsYear(), c=seikiOf(y);
+    const head=bc?`紀元前 ${y} 年は、紀元前 何世紀？`:`西暦 ${y} 年は、何世紀？`;
+    const rng=bc?`紀元前${c*100}年〜紀元前${(c-1)*100+1}年が紀元前${c}世紀`:`${(c-1)*100+1}年〜${c*100}年が${c}世紀`;
+    return {q:head+"（数字で）", ans:c, unit:"世紀",
+      steps:`100で割って、小数点以下を切り上げる：${y} ÷ 100 ＝ ${y/100} → ${c}\n（${rng}。${y%100===0?"「00年」はその世紀の最後の年。":y%100===1?"「01年」から新しい世紀。":""}0世紀はないので、1世紀は${bc?"紀元前100年〜紀元前1年":"1年〜100年"}）`}; },
+  rs_range(){ const bc=Math.random()<.3, c=bc?rint(1,30):rint(1,21);
+    const f=(a,b)=>bc?`紀元前${a}年〜紀元前${b}年`:`${a}年〜${b}年`, ok=(a,b)=>a>0&&b>0;
+    const a=bc?f(c*100,(c-1)*100+1):f((c-1)*100+1,c*100);
+    const cand=bc?[[c*100-1,(c-1)*100],[c*100+99,c*100],[(c+1)*100,c*100+1],[(c-1)*100,(c-2)*100+1]]
+                 :[[(c-1)*100,c*100-1],[c*100,c*100+99],[c*100+1,(c+1)*100],[(c-2)*100+1,(c-1)*100]];
+    const wrong=shuffle(cand.filter(([x,y])=>ok(x,y)).map(([x,y])=>f(x,y)).filter(x=>x!==a)).slice(0,3);
+    if(wrong.length<3) return GENS.rs_range();
+    return {choice:true, q:`${bc?"紀元前 ":""}${c}世紀は、いつからいつまで？`, a, wrong,
+      steps:`${bc?"紀元前":""}${c}世紀 ＝ ${a}\n${bc?"紀元前は数字が大きいほうが古い。紀元前1世紀＝紀元前100年〜紀元前1年、紀元前2世紀＝紀元前200年〜紀元前101年":"1世紀＝1年〜100年。○世紀は「(○−1)01年」から「○00年」まで（例：14世紀＝1301年〜1400年）"}`}; },
+  rs_span(){ const a=rint(1,30)*pick([10,25,50,100])%3000||100, b=rint(1,20)*pick([10,25,50,100])%2000||50;
+    return {q:`紀元前 ${a} 年から 紀元後（西暦）${b} 年までは、何年間？（両方の年をふくめて数える）`, ans:a+b, unit:"年間",
+      steps:`紀元0年はない（紀元前1年の次が紀元1年）。\n紀元前の${a}年分（紀元前${a}年〜紀元前1年）＋ 紀元後の${b}年分（1年〜${b}年）＝ ${a+b}年間\n（${a}＋${b}−1 ＝ ${a+b-1} とすると、0年があることになってしまう）`}; },
+  rs_shi(){ const y=rint(1990,2040), e=etoOf(y), a=ETO.shi[e.shi]+"（"+ETO.shiY[e.shi]+"）";
+    const wrong=shuffle(ETO.shi.map((x,i)=>x+"（"+ETO.shiY[i]+"）").filter(x=>x!==a)).slice(0,3);
+    return {choice:true, img:"f_eto", q:`表を参考に、西暦 ${y} 年の十二支を答えよう。`, a, wrong,
+      steps:`十二支は12年で一回り。2020年が子（ね）。${y}年は2020年の ${Math.abs(y-2020)} 年${y>=2020?"後":"前"}。\n${Math.abs(y-2020)} を12で割った余り ${Math.abs(y-2020)%12} → 表の子から${y>=2020?"右へ":"左へ（亥・戌…と）"} ${Math.abs(y-2020)%12} つ${y>=2020?"進む":"もどる"} → ${a}`}; },
+  rs_eto(){ const y=pick([rint(1980,2045), rint(1980,2045), 672, 1868, 1911, 1924]), e=etoOf(y), a=ETO.kan[e.kan]+ETO.shi[e.shi];
+    const wrong=new Set(); while(wrong.size<3){ const k=rint(0,9), t=rint(0,11); const w=ETO.kan[k]+ETO.shi[t]; if(w!==a && (k+t)%2===0) wrong.add(w); }
+    const d=y-2024, ad=Math.abs(d), go=d>=0?"進む":"もどる";
+    return {choice:true, img:"f_eto", q:`【発展】西暦 ${y} 年の干支（十干と十二支の組み合わせ）は？`, a, wrong:[...wrong],
+      steps:`2024年が甲辰（きのえたつ）。${y}年は2024年の ${ad} 年${d>=0?"後":"前"}。\n十干は10年で一回り：${ad}÷10の余り ${ad%10} → 甲から ${ad%10} つ${go} → ${ETO.kan[e.kan]}（${ETO.kanY[e.kan]}）\n十二支は12年で一回り：${ad}÷12の余り ${ad%12} → 辰から ${ad%12} つ${go} → ${ETO.shi[e.shi]}（${ETO.shiY[e.shi]}）\n答え：${a}（10と12の組み合わせは60年で一回り＝還暦）`
+        +({672:"\n※672年の「壬申の乱」は、",1868:"\n※1868年の「戊辰戦争」は、",1911:"\n※1911年の「辛亥革命」は、",1924:"\n※1924年にできた「甲子園球場」は、"}[y]||"")+(([672,1868,1911,1924].includes(y))?"この干支が名前の由来":"")}; },
 });
 
 function calcOk(input, ans){ const x=parseFloat(String(input).normalize("NFKC").replace(/[−ー‐－]/g,"-").replace(/[^\d.\-]/g,"")); if(isNaN(x)) return false; return Math.abs(x-ans)<=Math.max(Math.abs(ans)*0.01,0.001); }
@@ -883,7 +945,7 @@ function sparkle(){
    画面
    ============================================================ */
 let session=null, test=null, testTimer=null;
-let SUBJ = "";
+let SUBJ = "", FSUBJ = "";   // SUBJ＝学習キー（例 "英語" "社会・歴史"）、FSUBJ＝分野を選んでいる教科
 function go(h){ if(location.hash!==h) location.hash=h; else route(); }
 window.addEventListener("hashchange", ()=>{
   if(K && !K.done && location.hash!=="#ktest"){
@@ -914,6 +976,7 @@ function route(){
   if(h==="#ktest" && K && !K.done){ applyTheme("漢字"); return renderKTest(); }
   if(h==="#kresult" && K && K.done){ applyTheme("漢字"); return renderKResult(); }
   if(h==="#settings"){ applyTheme(null); return renderSettings(); }
+  if(h==="#field" && FSUBJ){ applyTheme(FSUBJ); return renderField(); }
   if(h==="#top" || !SUBJ){ applyTheme(null); return renderTop(); }
   applyTheme(SUBJ);
   if(h==="#quiz" && session) return renderQuiz();
@@ -925,7 +988,12 @@ function route(){
   if(h==="#stats") return renderStats();
   return renderHome();
 }
-function openSubj(s){ SUBJ=s; DB.ui.subj=s; save(); tsel=null; go("#home"); }
+function openSubj(s){
+  if(fieldsOf(s).length){ FSUBJ=s; return go("#field"); }   // 社会 → 地理／歴史を選ぶ
+  SUBJ=s; DB.ui.subj=s; save(); tsel=null; go("#home");
+}
+function openKey(k){ SUBJ=k; DB.ui.subj=k; save(); tsel=null; go("#home"); }
+function homeBack(){ const [s,f]=skParts(SUBJ); if(f){ FSUBJ=s; return "#field"; } return "#top"; }
 function topbar(title, backTo, gear){
   return `<div class="top">${backTo?`<button class="back" onclick="go('${backTo}')" aria-label="もどる">←</button>`:""}<h1>${title}</h1>
     ${gear?`<button class="icon" onclick="go('#settings')" aria-label="設定">⚙️</button>`:""}</div>`;
@@ -941,7 +1009,7 @@ function renderWho(){
       ${pf.id===PROF.cur?`<span class="go" style="background:#C9C0CC">前回</span>`:""}</button>`).join("")}`;
 }
 async function pickWho(id){
-  PROF.cur=id; saveProfiles(); load(); SUBJ = DB.ui.subj && subjectsAll().includes(DB.ui.subj) ? DB.ui.subj : "";
+  PROF.cur=id; saveProfiles(); load(); SUBJ = DB.ui.subj && studyKeys().includes(DB.ui.subj) ? DB.ui.subj : "";
   try{ sessionStorage.setItem("manadori:who","1"); }catch(e){}
   await refreshPending(); tsel=null; session=null; go("#top");
   if(syncOn()){ toast("☁️ "+curProf().name+"の最新の記録を確認しています…"); syncNow({only:[id]}).then(c=>{ if(c) toast("☁️ ほかの端末の記録を受け取りました"); }); }   // ほかの端末でやった分をすぐ受け取る
@@ -957,7 +1025,14 @@ async function pickWho(id){
    ・その日の分は、その日の最初に1回だけ決めて固定（解いている途中で増えたりしない）
    ============================================================ */
 const FINAL_DAYS = 3, BOOST = 1.6;
-function baseDaily(subj){ const by=DB.settings.dailyBy||{}; return (subj&&by[subj]) || DB.settings.daily || (isKid()?10:15); }   // 教科ごとに変えられる
+function baseDaily(subj){   // 教科ごとに変えられる
+  const by=DB.settings.dailyBy||{}, [s,f]=skParts(subj), b=(s&&by[s]) || DB.settings.daily || (isKid()?10:15);
+  if(!f) return b;
+  const keys=fieldsOf(s).map(x=>s+"・"+x), rest=k=>allQ(k).filter(q=>boxOf(q.id)<3).length;
+  const all=keys.reduce((n,k)=>n+rest(k),0), mine=rest(subj), live=keys.filter(k=>allQ(k).length).length||1;
+  const share = all ? mine/all : 1/live;
+  return allQ(subj).length ? Math.max(5, Math.round(b*share)) : 0;
+}
 /* この範囲をテストまでに定着させる目安（1日あたり）：新しい問題のペース ÷ 0.55（残りは復習） */
 function needDaily(subj){ const dte=daysToExam(); if(dte===null||dte<=FINAL_DAYS) return null; const left=allQ(subj).filter(q=>!prog(q.id)).length; if(!left) return null;
   return Math.ceil(Math.ceil(left/(dte-FINAL_DAYS))/0.55/5)*5; }
@@ -1036,7 +1111,7 @@ function planStatus(subj){
   } else {
     icon="📅"; tone="info"; head="テストの日を入れると、ペースを計算するよ"; sub="「設定」→「テストの日」に入れてね";
   }
-  const nd=needDaily(subj), hint = nd && nd>baseDaily(subj)+2 ? `👪 おうちの人へ：この範囲をテストまでに定着させる目安は1日${nd}問です（今は${baseDaily(subj)}問）。設定の「教科ごとに変える」で増やせます。` : "";
+  const nd=needDaily(subj), hint = nd && nd>baseDaily(subj)+2 ? `👪 おうちの人へ：この範囲をテストまでに定着させる目安は1日${nd}問です（今は${baseDaily(subj)}問）。設定の「教科ごとに変える」${skParts(subj)[1]?"で「"+skParts(subj)[0]+"」を":"で"}増やせます。` : "";
   return {icon, head, sub, tone, touched, fixed, weak, tot, hint};
 }
 function planCard(subj){
@@ -1052,25 +1127,40 @@ function planCard(subj){
 
 function streak(){ let s=0, d=today(); if(!(DB.days[d]&&DB.days[d].n)) d=addDays(d,-1); while(DB.days[d]&&DB.days[d].n){ s++; d=addDays(d,-1); } return s; }
 function greeting(){ const h=new Date().getHours(); return h<5?"夜ふかしさん、おつかれさま！":h<10?"おはよう！":h<17?"こんにちは！":"おつかれさま！"; }
+/* 教科（または分野）のカード。分ける教科（社会）は、分野ごとの今日の数を合わせて表示 */
+function subjCard(k){
+  const [subj,f]=skParts(k), split=!f && fieldsOf(subj).length, t=theme(k), qs=allQ(k);
+  const keys = split ? fieldsOf(subj).map(x=>subj+"・"+x).filter(x=>allQ(x).length) : [k];
+  const label = f ? f : k;
+  if(!qs.length) return {n:0, html:`<button class="subjcard soon" onclick="toast('${esc(label)}の問題データを読み込むと始められます')">
+        <span class="sic" style="background:linear-gradient(135deg,${t.g1},${t.g2})">${t.icon}</span>
+        <span class="st"><span class="sn">${esc(label)}</span><br><span class="muted">もうすぐ追加</span></span>
+        <span class="ribbon" style="background:${t.c}">準備中</span></button>`};
+  const per=keys.map(x=>{ const p=dailyPlan(x); return p.due.length+p.fresh.length; }), n=per.reduce((a,b)=>a+b,0);
+  const L=secStats(qs), tot=qs.length||1;
+  const sub = split ? keys.map((x,i)=>theme(x).icon+" "+esc(skParts(x)[1])+" "+(per[i]?`${per[i]}問`:"✓")).join("　") : [...new Set(qs.map(q=>q.unit))].map(esc).join("・");
+  const ps = split ? "👉 分野をえらんでスタート" : (st=>st.icon+" "+esc(st.head))(planStatus(k));
+  return {n, html:`<button class="subjcard" style="border-color:${t.soft}" onclick="${f?`openKey('${esc(k)}')`:`openSubj('${esc(k)}')`}">
+      <span class="sic" style="background:linear-gradient(135deg,${t.g1},${t.g2})">${t.icon}</span>
+      <span class="st"><span class="sn">${esc(label)}</span>
+        <div class="muted">${sub}</div>
+        <div class="pstat">${ps}</div>
+        <div class="bar" style="margin-top:6px"><i style="width:${L.lv[2]/tot*100}%;background:${t.c}"></i><i style="width:${L.lv[1]/tot*100}%;background:${t.g1};opacity:.55"></i></div></span>
+      <span class="go" style="background:${n?t.c:"#C9C0CC"}">${n?`今日 ${n}問`:"完了 ✓"}</span></button>`};
+}
+/* 分野をえらぶページ（社会 → 地理／歴史） */
+function renderField(){
+  autoGame(700);
+  const s=FSUBJ, t=theme(s), keys=fieldsOf(s).map(x=>s+"・"+x);
+  if(!keys.length){ openSubj(s); return; }
+  app().innerHTML=`${topbar(`<span>${t.icon}</span>${esc(s)}`,"#top",true)}
+    <div class="greet"><span class="bob">${doriSVG("normal",72)}</span><div class="bubble">どの分野をやる？<br><span class="muted">分野ごとに「今日の学習」「単元練習」「模擬テスト」「記録」があるよ</span></div></div>
+    ${keys.map(k=>subjCard(k).html).join("")}`;
+}
 function renderTop(){
   autoGame(700);
   const dte=daysToExam(), st=streak(), subs=subjectsAll(), td=DB.days[today()]||{n:0};
-  let left=0; const cards=subs.map(s=>{
-    const t=theme(s), qs=allQ(s), has=qs.length>0;
-    if(!has) return `<button class="subjcard soon" onclick="${SUBJECTS.includes(s)?`toast('${s}の問題データを読み込むと始められます')`:""}">
-        <span class="sic" style="background:linear-gradient(135deg,${t.g1},${t.g2})">${t.icon}</span>
-        <span class="st"><span class="sn">${esc(s)}</span><br><span class="muted">もうすぐ追加</span></span>
-        <span class="ribbon" style="background:${t.c}">準備中</span></button>`;
-    const p=dailyPlan(s), n=p.due.length+p.fresh.length; left+=n;
-    const L=secStats(qs), tot=qs.length||1;
-    return `<button class="subjcard" style="border-color:${t.soft}" onclick="openSubj('${esc(s)}')">
-      <span class="sic" style="background:linear-gradient(135deg,${t.g1},${t.g2})">${t.icon}</span>
-      <span class="st"><span class="sn">${esc(s)}</span>
-        <div class="muted">${[...new Set(qs.map(q=>q.unit))].map(esc).join("・")}</div>
-        <div class="pstat">${(st=>st.icon+" "+esc(st.head))(planStatus(s))}</div>
-        <div class="bar" style="margin-top:6px"><i style="width:${L.lv[2]/tot*100}%;background:${t.c}"></i><i style="width:${L.lv[1]/tot*100}%;background:${t.g1};opacity:.55"></i></div></span>
-      <span class="go" style="background:${n?t.c:"#C9C0CC"}">${n?`今日 ${n}問`:"完了 ✓"}</span></button>`;
-  }).join("");
+  let left=0; const cards=subs.map(s=>{ const c=subjCard(s); left+=c.n; return c.html; }).join("");
   const msg = !allQ().length ? "まずは設定から問題データを読み込んでね"
     : left===0&&td.n ? "今日の分はぜんぶ終わり！すごい！"
     : dte!==null&&dte>=0&&dte<=7 ? `テストまであと${dte}日。苦手をつぶそう！` : "今日もいっしょにがんばろう！";
@@ -1103,8 +1193,8 @@ function renderHome(){
         ${n?`<div class="big">${n}問</div><div class="muted">復習 ${plan.due.length}問${plan.due.filter(isWeak).length?`（まちがえた問題 ${plan.due.filter(isWeak).length}）`:""} ＋ 新しい問題 ${plan.fresh.length}問</div>`
            :`<div class="big">今日の分は完了！</div><div class="muted">今日は${ds.n}問・正解${ds.c}問</div>`}</div>
         ${n?`<button class="btn" onclick="startDaily()">スタート ▶</button>`:`<button class="btn" onclick="go('#units')">単元練習でもっとやる</button>`}</div>`;
-  const miss=Object.keys(SETS).filter(id=>SETS[id].subject===SUBJ && missingImg(id));
-  app().innerHTML=`${topbar(`<span>${t.icon}</span>${esc(SUBJ)}`,"#top",true)}
+  const miss=Object.keys(SETS).filter(id=>setLevel(SETS[id])===curProf().level && setMatch(SETS[id],SUBJ) && missingImg(id));
+  app().innerHTML=`${topbar(`<span>${t.icon}</span>${esc(SUBJ)}`,homeBack(),true)}
     ${miss.length?`<div class="card warn">⚠️ <b>図・写真のデータが入っていません</b><br><span class="muted">「設定」→「ファイルから読み込む」で、${esc(miss.map(id=>SETS[id].unit).join("・"))}の問題ファイルを読み込み直してね。記録は消えません。</span></div>`:""}
     ${hero}
     ${qs.length?planCard(SUBJ):""}
@@ -1133,7 +1223,7 @@ function answerQ(ok, note, soft, unsure){
     const wasNew=!prog(q.id);
     st.prev = DB.prog[q.id] ? JSON.parse(JSON.stringify(DB.prog[q.id])) : null;
     session.graded[q.id]=true; grade(q, ok, soft, {unsure, fmt:q.fmt});
-    if(wasNew){ const s=dayRec().subj[q.subject]; s.nw=(s.nw||0)+1; save(); }
+    if(wasNew){ const r=dayRec(); dayKeys(q).forEach(k=>{ const s=r.subj[k]; if(s) s.nw=(s.nw||0)+1; }); save(); }
     session.results.push({q, ok:ok&&!unsure, unsure:!!unsure});
   }
   if(!ok || unsure) requeue(q);
@@ -1149,7 +1239,7 @@ function giveUp(){ const st=session.state; st.input=""; st.reveal=true; st.check
 function markUnsure(){   // 正解したけど自信がなかった（まぐれ）→ 明日もう1回
   const q=curQ(), st=session.state;
   if("prev" in st){ if(st.prev) DB.prog[q.id]=st.prev; else delete DB.prog[q.id];
-    const d=dayRec(); d.n=Math.max(0,d.n-1); d.c=Math.max(0,d.c-1); const s=d.subj[q.subject]; if(s){ s.n=Math.max(0,s.n-1); s.c=Math.max(0,s.c-1); }
+    const d=dayRec(); d.n=Math.max(0,d.n-1); d.c=Math.max(0,d.c-1); dayKeys(q).forEach(k=>{ const s=d.subj[k]; if(s){ s.n=Math.max(0,s.n-1); s.c=Math.max(0,s.c-1); } });
     grade(q, true, false, {unsure:true, fmt:q.fmt}); delete st.prev; }
   if(st.checkKey>0) chkAll().then(all=>{ const r=all.find(x=>x.k===st.checkKey); if(r){ r.self="unsure"; chkPut(r); } });
   const r=session.results.find(x=>x.q.id===q.id); if(r){ r.ok=false; r.unsure=true; }
@@ -1277,7 +1367,7 @@ function padReveal(){ const st=session.state, c=$("#pad");
 function fixOk(){
   const q=curQ(), st=session.state;
   if("prev" in st){ if(st.prev) DB.prog[q.id]=st.prev; else delete DB.prog[q.id];
-    const d=dayRec(); d.n=Math.max(0,d.n-1); const s=d.subj[q.subject]; if(s) s.n=Math.max(0,s.n-1);
+    const d=dayRec(); d.n=Math.max(0,d.n-1); dayKeys(q).forEach(k=>{ const s=d.subj[k]; if(s) s.n=Math.max(0,s.n-1); });
     grade(q, true, st.hint); delete st.prev; }
   const r=session.results.find(x=>x.q.id===q.id); if(r) r.ok=true;
   session.list=session.list.filter((x,k)=>k<=session.i||!(x.retry&&x.id===q.id));
@@ -1562,7 +1652,7 @@ function hasHole(cells,w,h){
 
 /* ---- 遊べるかどうか ---- */
 function questState(){
-  const subs=subjectsAll().filter(s=>allQ(s).length);
+  const subs=studyKeys().filter(s=>allQ(s).length);
   const left=subs.reduce((n,s)=>{ const p=dailyPlan(s); return n+p.due.length+p.fresh.length; },0);
   const td=DB.days[today()], did=(td&&td.n)||0;
   return {subs, left, did, done: subs.length>0 && left===0 && did>0};
@@ -2076,7 +2166,7 @@ function renderStats(){
   for(let i=0;i<28;i++){ const d=addDays(start,i), r=DB.days[d], n=(r&&r.subj&&r.subj[SUBJ]&&r.subj[SUBJ].n)||0;
     cal+=`<i title="${d} ${n}問" style="${n?`background:${th.c};opacity:${n<10?.35:n<25?.65:1}`:""};${d===t?"outline:2px solid var(--star)":""}"></i>`; }
   const byUnit={}; secs.forEach(s=>{ (byUnit[s.unit] ||= []).push(s); });
-  const tests=DB.tests.filter(r=>(r.subject||"")===SUBJ || (!r.subject && tot.some(q=>r.bySec && r.bySec[q.secKey])));
+  const tests=DB.tests.filter(r=>(r.subject||"")===SUBJ || ((!r.subject || (skParts(SUBJ)[1] && r.subject===skParts(SUBJ)[0])) && tot.some(q=>r.bySec && r.bySec[q.secKey])));
   app().innerHTML=topbar("📊 記録","#home")+`
     <div class="card"><b>${esc(SUBJ)}の定着度</b>
       <div style="display:flex;gap:16px;margin:8px 0">
@@ -2129,7 +2219,7 @@ function renderSettings(){
     <h2>問題データ</h2>
     <div class="card">
       ${Object.keys(SETS).length?`<div class="list">${Object.entries(SETS).map(([id,s])=>`<div class="it"><div class="t">
-          <b>${theme(s.subject).icon} ${esc(s.subject)}・${esc(s.unit)}</b> <span class="pill">${esc(setLevel(s))}</span><div class="muted">${s.questions.length}問${s.images?"・図"+Object.keys(s.images).length+"枚":""}${s.audio?"・音声"+Object.keys(s.audio).length:""}${s.version?"・ver."+s.version:""}</div>${missingImg(id)?`<div style="color:var(--ng);font-size:13px;font-weight:700">⚠️ 図が入っていません。読み込み直してね</div>`:""}</div>
+          <b>${theme(s.subject).icon} ${esc(s.subject)}${fieldsOf(s.subject).length?"（"+esc(setField(s))+"）":""}・${esc(s.unit)}</b> <span class="pill">${esc(setLevel(s))}</span><div class="muted">${s.questions.length}問${s.images?"・図"+Object.keys(s.images).length+"枚":""}${s.audio?"・音声"+Object.keys(s.audio).length:""}${s.version?"・ver."+s.version:""}</div>${missingImg(id)?`<div style="color:var(--ng);font-size:13px;font-weight:700">⚠️ 図が入っていません。読み込み直してね</div>`:""}</div>
           <button class="btn ghost" style="width:auto;min-height:40px" onclick="delSet('${esc(id)}')">削除</button></div>`).join("")}</div>`:`<p class="muted">まだ読み込まれていません</p>`}
       <div class="spacer"></div>
       <label class="btn">ファイルから読み込む<input type="file" accept=".json,application/json" style="display:none" onchange="importFile(this.files[0],'data')"></label>
@@ -2147,7 +2237,8 @@ function renderSettings(){
         ・まちがえた問題・自信なしの問題を優先して出します<br>
         ・進みが遅いときや、まちがいがたまっているときは、その教科の数の最大${BOOST}倍まで自動で増やします<br>
         ・「目安」は、新しい問題を1回解いたあと、テストまでに3回くらい復習できる量です。目安より少ないと、範囲は1回終わっても覚えきれないことがあります<br>
-        ・テスト${FINAL_DAYS}日前からは、新しい問題はお休みして総ざらいにします<br>
+        ・テスト${FINAL_DAYS}日前からは、新しい問題はお休みして総ざらいにします<br>        ${subjectsAll().filter(x=>fieldsOf(x).length).map(x=>`・${esc(x)}は「${fieldsOf(x).map(esc).join("」「")}」に分けて出します。${esc(x)}の数を、まだ定着していない問題が多い分野に多めに配ります<br>`).join("")}
+
         ・その日の問題数は、その日の最初に決まり、途中で増えません</p></div>
     ${syncCardHTML()}
     <h2>記録のバックアップ</h2>
@@ -2179,7 +2270,7 @@ async function importText(text, kind){
   if(d.questions.find(q=>!q.id||!q.type)){ toast("問題データにこわれた部分があります"); return; }
   const isNew=!SETS[d.set];
   delete SYNC.del[d.set]; saveSync();
-  await putSet(d.set,{u:Date.now(), subject:d.subject||"", unit:d.unit||d.set, level:d.level||"中学", source:d.source||"", version:d.version||1, lang:d.lang||"", images:d.images||null, audio:d.audio||null, strokes:d.strokes||null, credits:d.credits||"", questions:d.questions});
+  await putSet(d.set,{u:Date.now(), subject:d.subject||"", field:d.field||"", unit:d.unit||d.set, level:d.level||"中学", source:d.source||"", version:d.version||1, lang:d.lang||"", images:d.images||null, audio:d.audio||null, strokes:d.strokes||null, credits:d.credits||"", questions:d.questions});
   resetPlans(); save(true);
   toast(`${d.subject}・${d.unit}：${d.questions.length}問を${isNew?"読み込み":"更新し"}ました`); renderSettings();
 }
@@ -2591,7 +2682,7 @@ window.addEventListener("online",()=>syncSoon(1000));
   app().innerHTML=`<div class="card emptybox">${doriSVG("normal",80)}<p class="muted">読み込み中…</p></div>`;
   idb=await idbOpen(); SETS=await idbAll();
   if(LEGACY_SETS){ for(const [id,s] of Object.entries(LEGACY_SETS)) if(!SETS[id]) await putSet(id,s); if(idb) save(); LEGACY_SETS=null; }
-  SUBJ = DB.ui.subj && subjectsAll().includes(DB.ui.subj) ? DB.ui.subj : "";
+  SUBJ = DB.ui.subj && studyKeys().includes(DB.ui.subj) ? DB.ui.subj : "";
   await refreshPending();
   let asked=false; try{ asked=!!sessionStorage.getItem("manadori:who"); }catch(e){}
   if(!location.hash || ["#quiz","#done","#test","#result","#mom"].includes(location.hash)) history.replaceState(null,"","#top");
