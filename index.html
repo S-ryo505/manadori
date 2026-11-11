@@ -206,7 +206,7 @@ body.gquake #app{animation:gquake .7s linear}
 .gframe{position:absolute}
 .gcell{fill:#E9E7EC;stroke:#B9C4D6;stroke-width:1}
 .gtray{position:absolute;left:8px;right:8px;border-radius:18px;background:rgba(0,0,0,.04);border:2px dashed var(--line)}
-.gpiece{position:absolute;pointer-events:none;transition:left .15s,top .15s;filter:drop-shadow(0 3px 2px rgba(0,0,0,.25))}
+.gpiece{position:absolute;pointer-events:none;transition:left .15s,top .15s,transform .15s;transform-origin:center;filter:drop-shadow(0 3px 2px rgba(0,0,0,.25))}
 .gpiece svg{display:block}.gpiece rect{pointer-events:auto}
 .gpiece.drag{transition:none;z-index:5;filter:drop-shadow(0 10px 8px rgba(0,0,0,.35))}
 .gpiece.sel .gpc{filter:brightness(1.08)}
@@ -326,7 +326,7 @@ body.sandbox #app{padding-top:22px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.15.0";
+const APP_VER = "1.16.0";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -1610,7 +1610,16 @@ const PIECES = {
   I3:{c:"#2C9BE0", cells:[[0,0],[1,0],[2,0]]},
   P5:{c:"#2C9A45", cells:[[1,0],[2,0],[0,1],[1,1],[2,1]]},
   V3:{c:"#23977A", cells:[[0,0],[0,1],[1,1]]},
+  U5:{c:"#7A4FD0", cells:[[0,0],[2,0],[0,1],[1,1],[2,1]]},
+  T5:{c:"#D9482B", cells:[[0,0],[1,0],[2,0],[1,1],[1,2]]},
+  N5:{c:"#3A8FD0", cells:[[0,0],[1,0],[1,1],[2,1],[3,1]]},
+  W5:{c:"#4FA83A", cells:[[0,0],[0,1],[1,1],[1,2],[2,2]]},
+  F5:{c:"#C9A21E", cells:[[1,0],[2,0],[0,1],[1,1],[1,2]]},
+  V5:{c:"#B8237A", cells:[[0,0],[0,1],[0,2],[1,2],[2,2]]},
+  X5:{c:"#E07B1E", cells:[[1,0],[0,1],[1,1],[2,1],[1,2]]},
 };
+const PCOL = ["#E2352A","#2D6CB2","#2C9A45","#E3B21F","#8A4FD0","#F07B1E"];   // 1問の中では、ちがう色にする
+function pcol(id){ return (GZ&&GZ.puz.col&&GZ.puz.col[id]) || PIECES[id].c; }
 const GEMS = [ {k:"red", t:15, c:"#E8344E", name:"赤"}, {k:"blue", t:25, c:"#3D7BEA", name:"青"}, {k:"green", t:35, c:"#2DB36B", name:"緑"}, {k:"yellow", t:45, c:"#F2C230", name:"黄色"} ];
 const GAME_LIMIT = 45;
 const GAME_PER_DAY = 2;   // ノルマ達成で遊べる回数（1日）
@@ -1638,11 +1647,15 @@ function porients(cells){ const out=[], seen=new Set(); let c=pnorm(cells);
 function pdim(cells){ return [Math.max(...cells.map(c=>c[0]))+1, Math.max(...cells.map(c=>c[1]))+1]; }
 
 /* ---- 枠を作る：4つのブロックを実際にくっつけて置いた形（＝必ず解ける） ---- */
-function genPuzzle(avoid){
-  const ids=Object.keys(PIECES);
-  for(let tryN=0; tryN<600; tryN++){
-    const pick4=shuffle(ids).slice(0,4), area=pick4.reduce((s,id)=>s+PIECES[id].cells.length,0);
-    if(area<13 || area>18) continue;                       // ちょうどよい大きさ（13〜18マス）
+function genPuzzle(avoid, n){
+  n=n||4; const ids=Object.keys(PIECES), [aMin,aMax]= n===5 ? [19,24] : [13,18];
+  // 最近使ったブロックの組み合わせ（20問ぶん）は使わない ＝ 同じ感じの問題が続かない
+  const recent=new Set((avoid||[]).filter(x=>!/^3D\|/.test(x)).slice(-20).map(x=>x.split("|")[0]));
+  const wPer = n===5 ? 1 : 0.55+Math.random()*0.6, wBox = n===5 ? 0.35 : 0.15+Math.random()*0.3;   // 外がたの「でこぼこ具合」を毎回かえる（5こは、まとまった形＝むずかしめ）
+  for(let tryN=0; tryN<1500; tryN++){
+    const pick4=shuffle(ids).slice(0,n), area=pick4.reduce((s,id)=>s+PIECES[id].cells.length,0);
+    if(area<aMin || area>aMax) continue;                   // ちょうどよい大きさ（4こ：13〜18マス／5こ：19〜24マス）
+    if(tryN<1000 && recent.has(pick4.slice().sort().join("+"))) continue;
     const order=shuffle(pick4).sort((a,b)=>PIECES[b].cells.length-PIECES[a].cells.length);
     const occ=new Set(), place={}; const K=(x,y)=>x+","+y;
     let ok=true;
@@ -1658,7 +1671,7 @@ function genPuzzle(avoid){
           const w=Math.max(...all.map(c=>c[0]))-Math.min(...all.map(c=>c[0]))+1, h=Math.max(...all.map(c=>c[1]))-Math.min(...all.map(c=>c[1]))+1;
           if(w>6||h>6) continue;
           const S=new Set(all.map(c=>K(c[0],c[1]))); let per=0; all.forEach(([x,y])=>[[1,0],[-1,0],[0,1],[0,-1]].forEach(([a,b])=>{ if(!S.has(K(x+a,y+b))) per++; }));
-          cand.push({o,dx,dy,score:per*1.0+w*h*0.35+Math.random()*2.2});
+          cand.push({o,dx,dy,score:per*wPer+w*h*wBox+Math.random()*2.2});
         }
       }
       if(!cand.length){ ok=false; break; }
@@ -1669,12 +1682,13 @@ function genPuzzle(avoid){
     if(!ok) continue;
     let cells=[...occ].map(s=>s.split(",").map(Number)); const mx=Math.min(...cells.map(c=>c[0])), my=Math.min(...cells.map(c=>c[1]));
     cells=cells.map(([x,y])=>[x-mx,y-my]); const [w,h]=pdim(cells);
-    if(w>6||h>5&&w>5||h>6) continue;
+    if(w>6||h>6||(n<5&&h>5&&w>5)) continue;
     if(hasHole(cells,w,h)) continue;                       // 穴のある枠はつくらない
     const sig=pick4.slice().sort().join("+")+"|"+pkey(cells);
     if(avoid && avoid.includes(sig)) continue;
     const sol={}; for(const id in place) sol[id]=place[id].map(([x,y])=>[x-mx,y-my]);
-    return {pieces:pick4, cells, w, h, sig, sol};
+    const cl=shuffle(PCOL), col={}; pick4.forEach((id,i)=>col[id]=cl[i]);
+    return {pieces:pick4, cells, w, h, sig, sol, col};
   }
   return null;
 }
@@ -1766,7 +1780,8 @@ function startPuzzle(){
   // デバッグ中は毎回あたらしい枠（子どもの「続き」には さわらない）
   let cur=!dbg && g.cur && g.cur.puz ? g.cur : null;   // クリアするまで（ギブアップしてクリアでもOK）同じパズル。日をまたいでも同じ
   if(!cur){
-    const puz=genPuzzle(dbg ? (g.cleared||[]).concat(GDBG_SEEN) : g.cleared);
+    const n = dbg ? (GDBG_N++%2 ? 5 : 4) : (playsOf(false)>=1 ? 5 : 4);   // 1回目は4こ、2回目は5こ
+    const puz=genPuzzle(dbg ? (g.cleared||[]).concat(GDBG_SEEN) : g.cleared, n) || genPuzzle(null, n);
     if(dbg) GDBG_SEEN.push(puz.sig);
     cur={date:today(), puz, start:Date.now(), done:false};
     if(!dbg){ g.cur=cur; save(); }
@@ -1777,7 +1792,7 @@ function startPuzzle(){
   clearInterval(GZ.tm); if(!GZ.giveup) GZ.tm=setInterval(gTick,100);
 }
 
-let GDBG_SEEN=[];   // デバッグ中に出した枠（同じものを出さない）
+let GDBG_SEEN=[], GDBG_N=0;   // デバッグ中に出した枠（同じものを出さない）
 function gNext(){ if(GZ) clearInterval(GZ.tm); document.querySelectorAll(".gclear").forEach(x=>x.remove()); GZ=null; startPuzzle(); }
 
 /* ---- 画面：パズル ---- */
@@ -1786,7 +1801,7 @@ function renderPuzzle(){
   const H=window.innerHeight||760;   // スマホの見える高さに、わく＋ブロック置き場＋ボタンが収まる大きさ
   const cs=Math.max(28, Math.min(52, Math.floor((W-16)/8.4), Math.floor((H-(GZ.debug?262:200))/(P.h+8))));
   const bw=P.w*cs, bh=P.h*cs, bx=Math.round((W-bw)/2), by=14;
-  const slotW=W/2, slotH=4*cs+6, ty=by+bh+28;
+  const slotW=P.pieces.length>4?(W-16)/3:W/2, slotH=4*cs+6, ty=by+bh+28;
   GZ.cs=cs; GZ.bx=bx; GZ.by=by; GZ.ty=ty; GZ.slotW=slotW; GZ.slotH=slotH; GZ.W=W;
   const F=new Set(P.cells.map(c=>c.join(",")));
   let board=""; P.cells.forEach(([x,y])=>{ board+=`<rect x="${x*cs+1}" y="${y*cs+1}" width="${cs-2}" height="${cs-2}" rx="3" class="gcell"/>`; });
@@ -1806,7 +1821,7 @@ function renderPuzzle(){
   if(GZ.giveup){ drawGhost(); gFlag(); } else gTick();
 }
 function drawPiece(id){
-  const el=$("#gp-"+id), cs=GZ.cs, o=GZ.orient[id], [w,h]=pdim(o), col=PIECES[id].c, S=new Set(o.map(c=>c.join(",")));
+  const el=$("#gp-"+id), cs=GZ.cs, o=GZ.orient[id], [w,h]=pdim(o), col=pcol(id), S=new Set(o.map(c=>c.join(",")));
   let r="", edge="";
   o.forEach(([x,y])=>{ r+=`<rect x="${x*cs}" y="${y*cs}" width="${cs+.5}" height="${cs+.5}" fill="${col}"/>`;
     if(!S.has(`${x},${y-1}`)) edge+=`M${x*cs},${y*cs}h${cs}`; if(!S.has(`${x},${y+1}`)) edge+=`M${x*cs},${(y+1)*cs}h${cs}`;
@@ -1818,11 +1833,13 @@ function drawPiece(id){
   el.classList.toggle("sel", GZ.sel===id);
 }
 function slotPos(id){
-  const i=GZ.puz.pieces.indexOf(id), col=i%2, row=Math.floor(i/2), [w,h]=pdim(GZ.orient[id]), cs=GZ.cs;
-  return [Math.round(col*GZ.slotW+(GZ.slotW-w*cs)/2), Math.round(GZ.ty+row*GZ.slotH+(GZ.slotH-h*cs)/2)];
+  const N=GZ.puz.pieces.length, per=N>4?3:2, i=GZ.puz.pieces.indexOf(id), col=i%per, row=Math.floor(i/per), [w,h]=pdim(GZ.orient[id]), cs=GZ.cs;
+  const sx = N>4 ? 8+(row===1 ? GZ.slotW/2 : 0) : 0;   // 5こ：上に3こ、下に2こ（まん中よせ）
+  return [Math.round(sx+col*GZ.slotW+(GZ.slotW-w*cs)/2), Math.round(GZ.ty+row*GZ.slotH+(GZ.slotH-h*cs)/2)];
 }
-function toTray(id){ GZ.place[id]=null; const [x,y]=slotPos(id), el=$("#gp-"+id); el.style.left=x+"px"; el.style.top=y+"px"; el.classList.remove("placed"); }
-function putAt(id,gx,gy){ GZ.place[id]=[gx,gy]; const el=$("#gp-"+id); el.style.left=(GZ.bx+gx*GZ.cs)+"px"; el.style.top=(GZ.by+gy*GZ.cs)+"px"; el.classList.add("placed"); }
+function trayScale(id){ const [w,h]=pdim(GZ.orient[id]), cs=GZ.cs; return Math.min(1, (GZ.slotW-10)/(w*cs), (GZ.slotH-10)/(h*cs)); }   // 置き場では、はみ出さないよう小さく
+function toTray(id){ GZ.place[id]=null; const [x,y]=slotPos(id), el=$("#gp-"+id), k=trayScale(id); el.style.left=x+"px"; el.style.top=y+"px"; el.style.transform=k<1?`scale(${k})`:""; el.dataset.k=k; el.classList.remove("placed"); }
+function putAt(id,gx,gy){ GZ.place[id]=[gx,gy]; const el=$("#gp-"+id); el.style.left=(GZ.bx+gx*GZ.cs)+"px"; el.style.top=(GZ.by+gy*GZ.cs)+"px"; el.style.transform=""; el.dataset.k=1; el.classList.add("placed"); }
 function fitsAt(id,gx,gy){
   const F=new Set(GZ.puz.cells.map(c=>c.join(","))), occ=new Set();
   for(const k of GZ.puz.pieces){ if(k===id||!GZ.place[k]) continue; const [px,py]=GZ.place[k]; GZ.orient[k].forEach(([x,y])=>occ.add((x+px)+","+(y+py))); }
@@ -1840,14 +1857,14 @@ function bindPiece(id){
   el.onpointerdown=e=>{
     if(GZ.done) return; e.preventDefault(); el.setPointerCapture(e.pointerId);
     GZ.sel=id; GZ.puz.pieces.forEach(k=>$("#gp-"+k).classList.toggle("sel",k===id));
-    const r=el.getBoundingClientRect(); st={x0:e.clientX, y0:e.clientY, ox:e.clientX-r.left, oy:e.clientY-r.top, t0:Date.now(), moved:false, L:$("#glayer").getBoundingClientRect()};
+    const r=el.getBoundingClientRect(), k=+el.dataset.k||1; st={x0:e.clientX, y0:e.clientY, ox:(e.clientX-r.left)/k, oy:(e.clientY-r.top)/k, t0:Date.now(), moved:false, L:$("#glayer").getBoundingClientRect()};
     el.classList.add("drag");
   };
   el.onpointermove=e=>{
     if(!st) return; e.preventDefault();
     if(Math.hypot(e.clientX-st.x0,e.clientY-st.y0)>12) st.moved=true;
     if(!st.moved) return;
-    const lift=GZ.cs*.55;
+    const lift=GZ.cs*.55; el.style.transform="";
     el.style.left=(e.clientX-st.L.left-st.ox)+"px"; el.style.top=(e.clientY-st.L.top-st.oy-lift)+"px";
   };
   el.onpointerup=el.onpointercancel=e=>{
@@ -1901,7 +1918,7 @@ function onAnswer(id){
 function drawGhost(){
   const g=$("#gghost"); if(!g) return; const cs=GZ.cs; let h="";
   for(const id of GZ.puz.pieces){
-    const cells=GZ.puz.sol[id], S=new Set(cells.map(c=>c.join(","))), col=PIECES[id].c; let edge="";
+    const cells=GZ.puz.sol[id], S=new Set(cells.map(c=>c.join(","))), col=pcol(id); let edge="";
     cells.forEach(([x,y])=>{ h+=`<rect x="${x*cs}" y="${y*cs}" width="${cs}" height="${cs}" fill="${col}"/>`;
       if(!S.has(`${x},${y-1}`)) edge+=`M${x*cs},${y*cs}h${cs}`; if(!S.has(`${x},${y+1}`)) edge+=`M${x*cs},${(y+1)*cs}h${cs}`;
       if(!S.has(`${x-1},${y}`)) edge+=`M${x*cs},${y*cs}v${cs}`; if(!S.has(`${x+1},${y}`)) edge+=`M${(x+1)*cs},${y*cs}v${cs}`; });
@@ -1950,12 +1967,11 @@ function gQuit(){
    ============================================================ */
 const GAME3_LIMIT = 90;
 const P3COL = ["#E2352A","#2D6CB2","#2C9A45","#E3B21F","#8A4FD0","#F07B1E"];
-const LV3 = { chu:[{d:[2,2,3],k:3},{d:[3,3,2],k:4},{d:[3,3,3],k:6}], kid:[{d:[2,2,2],k:2},{d:[2,2,3],k:3},{d:[3,3,2],k:4}] };
-function g3Clears(){ return (gameData().log||[]).filter(e=>e.d3 && !e.giveup && !e.legacy).length; }
+// 1日の1回目は 2×2×2（ブロック2〜4こ）、2回目は 3×3×3（ブロック6こ）。中学・小学とも同じ
+const LV3 = [ {d:[2,2,2], k:[2,2,3,3,4], min:2, max:5}, {d:[3,3,3], k:[6], min:3, max:5} ];
 function g3Level(force){
-  const L=LV3[isKid()?"kid":"chu"]; if(force!=null) return L[force%L.length];
-  const n=g3Clears(), i = n<2 ? 0 : n<6 ? 1 : (Math.random()<.6 ? 2 : 1);
-  return L[i];
+  if(force!=null) return LV3[force%LV3.length];
+  return LV3[playsOf(true)>=1 ? 1 : 0];
 }
 /* ---- 立体の形のあつかい ---- */
 const R3 = { z:([x,y,z])=>[-y,x,z], x:([x,y,z])=>[x,-z,y], y:([x,y,z])=>[z,y,-x] };
@@ -1971,15 +1987,32 @@ function rot3(cells, ax, r){   // r＝今の見る向き。見ている向きを
 function randOrient(cells){ let c=n3(cells); const n=rint(0,30); for(let i=0;i<n;i++) c=n3(c.map(R3[pick(["x","y","z"])])); return c; }
 
 /* ---- 出題：箱をブロックに切り分ける ---- */
+// 箱を回すと同じになる切り分けは「同じ問題」として数える（回転24通りで、いちばん小さい書き方を名前にする）
+const ROT24=(()=>{ const out=[], seen=new Set(), q=[[[1,0,0],[0,1,0],[0,0,1]]];
+  const mul=(A,B)=>A.map(r=>[0,1,2].map(j=>r[0]*B[0][j]+r[1]*B[1][j]+r[2]*B[2][j]));
+  const G=[[[1,0,0],[0,0,-1],[0,1,0]],[[0,0,1],[0,1,0],[-1,0,0]],[[0,-1,0],[1,0,0],[0,0,1]]];
+  while(q.length){ const m=q.shift(), k=m+""; if(seen.has(k)) continue; seen.add(k); out.push(m); G.forEach(g=>q.push(mul(g,m))); }
+  return out; })();
+function canon3(pcs,dims){
+  let best=null;
+  for(const M of ROT24){
+    const cells=[]; pcs.forEach((c,i)=>c.forEach(([x,y,z])=>cells.push([M[0][0]*x+M[0][1]*y+M[0][2]*z, M[1][0]*x+M[1][1]*y+M[1][2]*z, M[2][0]*x+M[2][1]*y+M[2][2]*z, i])));
+    const mn=[0,1,2].map(j=>Math.min(...cells.map(c=>c[j]))); cells.forEach(c=>{ for(let j=0;j<3;j++) c[j]-=mn[j]; });
+    const D=[0,1,2].map(j=>Math.max(...cells.map(c=>c[j]))+1); if(D+""!==dims.slice().sort()+"") continue;   // 箱の形が変わる回し方は使わない
+    cells.sort((a,b)=>a[2]-b[2]||a[1]-b[1]||a[0]-b[0]); const re={}; let n=0;
+    const s=cells.map(c=>re[c[3]]??(re[c[3]]=n++)).join(""); if(best===null||s<best) best=s;
+  }
+  return best;
+}
 function genPuzzle3(avoid, lv){
   lv=lv||g3Level();
-  const K=(x,y,z)=>x+","+y+","+z;
-  for(let tryN=0; tryN<3000; tryN++){
-    let d=shuffle(lv.d.slice()); if(d[2]>3) continue; const [X,Y,Z]=d, V=X*Y*Z, k=lv.k;
-    // ブロックの大きさ（3〜5個）
+  const K=(x,y,z)=>x+","+y+","+z; let keep=null, keepAt=1e9;
+  for(let tryN=0; tryN<2500; tryN++){
+    let d=shuffle(lv.d.slice()); if(d[2]>3) continue; const [X,Y,Z]=d, V=X*Y*Z, k=pick(lv.k);
+    // ブロックの大きさ（lv.min〜lv.max 個）
     const sz=Array(k).fill(Math.floor(V/k)); for(let i=0;i<V%k;i++) sz[i]++;
-    for(let i=0;i<8;i++){ const a=rint(0,k-1), b=rint(0,k-1); if(a!==b && sz[a]>3 && sz[b]<5){ sz[a]--; sz[b]++; } }
-    if(sz.some(s=>s<3||s>5)) continue;
+    for(let i=0;i<8;i++){ const a=rint(0,k-1), b=rint(0,k-1); if(a!==b && sz[a]>lv.min && sz[b]<lv.max){ sz[a]--; sz[b]++; } }
+    if(sz.some(s=>s<lv.min||s>lv.max)) continue;
     const own={}, all=[]; for(let z=0;z<Z;z++) for(let y=0;y<Y;y++) for(let x=0;x<X;x++) all.push([x,y,z]);
     const nb=([x,y,z])=>[[x+1,y,z],[x-1,y,z],[x,y+1,z],[x,y-1,z],[x,y,z+1],[x,y,z-1]].filter(([a,b,c])=>a>=0&&b>=0&&c>=0&&a<X&&b<Y&&c<Z);
     let ok=true; const pcs=[];
@@ -1995,21 +2028,23 @@ function genPuzzle3(avoid, lv){
       pcs.push(mine);
     }
     if(!ok || all.some(c=>own[K(...c)]==null)) continue;
-    // 形のチェック：まっすぐな棒は1つまで。立体的なブロックを1つ以上（3個以上のとき）
-    const line=c=>{ const D=d3(c); return D.filter(v=>v>1).length===1; }, solid=c=>d3(c).every(v=>v>1);
+    // 形のチェック：3こ以上のまっすぐな棒は1つまで。大きい箱では立体的なブロックを1つ以上
+    const line=c=>c.length>=3 && d3(c).filter(v=>v>1).length===1, solid=c=>d3(c).every(v=>v>1);
     if(pcs.filter(line).length>1) continue;
-    if(k>=3 && !pcs.some(solid)) continue;
+    if(V>=18 && !pcs.some(solid)) continue;
     // 上から落として置ける順番があるか（同じ列で下のブロックを先に置く）
     const before=pcs.map(()=>new Set());
     for(let x=0;x<X;x++) for(let y=0;y<Y;y++) for(let z=0;z+1<Z;z++){ const a=own[K(x,y,z)], b=own[K(x,y,z+1)]; if(a!==b) before[b].add(a); }
     const done=new Set(); let prog=true; while(prog){ prog=false; for(let p=0;p<k;p++) if(!done.has(p) && [...before[p]].every(q=>done.has(q))){ done.add(p); prog=true; } }
     if(done.size<k) continue;
-    const sig="3D|"+d.join("x")+"|"+all.map(c=>own[K(...c)]).join("");
-    if(avoid && avoid.includes(sig)) continue;
+    const sig="3D|c|"+d.slice().sort().join("x")+"|"+canon3(pcs,d);
     const cols=shuffle(P3COL.slice());
-    return {d3:true, dims:d, sig, pieces:pcs.map((c,i)=>({id:"q"+i, c:cols[i%cols.length], sol:c}))};
+    const puz={d3:true, dims:d, sig, pieces:pcs.map((c,i)=>({id:"q"+i, c:cols[i%cols.length], sol:c}))};
+    const at=avoid ? avoid.lastIndexOf(sig) : -1;
+    if(at<0) return puz;
+    if(at<keepAt){ keepAt=at; keep=puz; }   // ぜんぶ出たことがあるときは、いちばん前に出たものを出す
   }
-  return null;
+  return keep;
 }
 
 /* ---- 描く：斜め上から見た図（等角図） ---- */
