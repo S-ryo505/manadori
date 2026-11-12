@@ -335,7 +335,7 @@ body.sandbox #app{padding-top:22px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.16.3";
+const APP_VER = "1.17.0";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -1074,7 +1074,7 @@ function needDaily(subj){ const dte=daysToExam(); if(dte===null||dte<=FINAL_DAYS
 function isWeak(q){ const p=prog(q.id); return !!p && p.box<=1; }          // まちがえた・自信なし（まだ覚えていない）
 function planCalc(subj){
   const t=today(), qs=allQ(subj), base=baseDaily(subj), cap=Math.ceil(base*BOOST), dte=daysToExam();
-  const fresh=qs.filter(q=>!prog(q.id)).sort((a,b)=>(b.star?1:0)-(a.star?1:0) || (b.miss?1:0)-(a.miss?1:0));   // ★マーカー（大事な問題）から先に
+  const fresh=qs.filter(q=>!prog(q.id)).sort((a,b)=>(b.star?1:0)-(a.star?1:0) || (b.miss?1:0)-(a.miss?1:0) || (b.focus?1:0)-(a.focus?1:0));   // ★マーカー（大事な問題）→ まちがえた → まとめページ の順に先に
   const due=qs.filter(q=>{const p=prog(q.id); return p&&p.box>=1&&p.due<=t;})
     .sort((a,b)=>(isWeak(b)?1:0)-(isWeak(a)?1:0) || prog(a.id).due.localeCompare(prog(b.id).due) || boxOf(a.id)-boxOf(b.id));
   const weakDue=due.filter(isWeak).length;
@@ -1471,7 +1471,8 @@ function renderKTestSetup(){
     ${past.length?`<h2>これまでの点数</h2><div class="card"><table>${past.map(r=>`<tr><td>${r.date.slice(5).replace("-","/")}</td><td class="muted">${r.n}問</td><td class="r"><b>${r.score}点</b></td></tr>`).join("")}</table></div>`:""}`;
 }
 function kUnit(enc,on){ const u=decodeURIComponent(enc); sections("漢字").filter(s=>s.unit===u).forEach(s=>KSEL.keys[on?"add":"delete"](s.key)); KSEL.pa=KSEL.pb=undefined; renderKTestSetup(); }
-function kPool(){ const seen=new Set(); return allQ("漢字").filter(q=>KSEL.keys.has(q.secKey) && !seen.has(q.w) && seen.add(q.w)); }   // 2つの単元に同じ言葉があっても1回だけ
+function kPool(){ const seen=new Set(), fq=q=>(q.focus?2:0)+(q.miss?1:0);   // 同じ言葉が2つあれば、まとめページ（出やすく）・まちがえた方を使う
+  return allQ("漢字").filter(q=>KSEL.keys.has(q.secKey)).sort((a,b)=>fq(b)-fq(a)).filter(q=>!seen.has(q.w) && seen.add(q.w)); }   // 2つの単元に同じ言葉があっても1回だけ
 function kCount(P){ return KSEL.n ? Math.min(KSEL.n, P*2) : P; }   // 最大で「ことばの数×2」（読み＋書き）
 /* ページ番号での範囲指定（単元名の「p.5〜8」から読み取る） */
 function secPages(sec){ const m=String(sec).match(/p\.(\d+)(?:〜(\d+))?/); return m?[+m[1], +(m[2]||m[1])]:null; }
@@ -1483,7 +1484,7 @@ function kSetPages(which){
   KSEL.keys=new Set(sections("漢字").filter(s=>{ const r=secPages(s.sec); return r && r[1]>=lo && r[0]<=hi; }).map(s=>s.key));
   KSEL.pa=lo; KSEL.pb=hi; renderKTestSetup();
 }
-function kWeight(q){ const p=prog(q.id); let w=1; if(q.miss) w+=2; if(!p) w+=.5; else if(p.box<=1) w+=2; else if(p.box>=4) w-=.5; return Math.max(.3,w); }
+function kWeight(q){ const p=prog(q.id); let w=1; if(q.miss) w+=2; if(q.focus) w+=1.5; if(!p) w+=.5; else if(p.box<=1) w+=2; else if(p.box>=4) w-=.5; return Math.max(.3,w); }
 function kPick(arr,k){ return arr.map(q=>({q,key:Math.random()**(1/kWeight(q))})).sort((a,b)=>b.key-a.key).slice(0,k).map(x=>x.q); }
 function startKTest(list){
   let items;
