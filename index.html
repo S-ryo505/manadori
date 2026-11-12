@@ -335,7 +335,7 @@ body.sandbox #app{padding-top:22px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.16.2";
+const APP_VER = "1.16.3";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -1639,10 +1639,11 @@ function gameData(){ DB.game ||= {gems:{red:0,blue:0,green:0,yellow:0}, last:"",
 function playsToday(){ const g=gameData(), t=today(), n=(g.log||[]).filter(e=>e.date===t).length; return n || (g.last===t?1:0); }   // 2台で遊んでも合計で数える   // 旧版（1日1回）の記録は1回とみなす
 function playsOf(d3){ const g=gameData(), t=today(), L=(g.log||[]).filter(e=>e.date===t), n=L.filter(e=>!!e.d3===!!d3).length;
   return n || (!d3 && !L.length && g.last===t ? 1 : 0); }
+let GAME3_ON = false;    // 3Dは、ふだんは出さない（デバッグモードの「ためす」でだけ遊べる）
 function gameMode(){   // 今日あそべるのはどっちか（いつもの → 2回おわったら つぎ）
   const g=gameData();
   if((g.cur&&g.cur.puz) || playsOf(false)<GAME_PER_DAY) return "2d";
-  if((g.cur3&&g.cur3.puz) || playsOf(true)<GAME_PER_DAY) return "3d";
+  if(GAME3_ON && ((g.cur3&&g.cur3.puz) || playsOf(true)<GAME_PER_DAY)) return "3d";
   return null;
 }
 function isDebug(){ try{ return localStorage.getItem("manadori:debug")==="1"; }catch(e){ return false; } }
@@ -1797,7 +1798,7 @@ function startPuzzle(){
   // デバッグ中は毎回あたらしい枠（子どもの「続き」には さわらない）
   let cur=!dbg && g.cur && g.cur.puz ? g.cur : null;   // クリアするまで（ギブアップしてクリアでもOK）同じパズル。日をまたいでも同じ
   if(!cur){
-    const n = dbg ? (GDBG_N++%2 ? 5 : 4) : (playsOf(false)>=1 ? 5 : 4);   // 1回目は4こ、2回目は5こ
+    const n = isKid() ? 4 : dbg ? (GDBG_N++%2 ? 5 : 4) : (playsOf(false)>=1 ? 5 : 4);   // 中学：1回目は4こ、2回目は5こ／小学：2回とも4こ
     const puz=genPuzzle(dbg ? (g.cleared||[]).concat(GDBG_SEEN) : g.cleared, n) || genPuzzle(null, n);
     if(dbg) GDBG_SEEN.push(puz.sig);
     cur={date:today(), puz, start:Date.now(), done:false};
