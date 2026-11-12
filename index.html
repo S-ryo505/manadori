@@ -181,6 +181,15 @@ body.gquake #app{animation:gquake .7s linear}
 @keyframes gbgin{0%{opacity:0}}
 .ggive{border:0;border-radius:99px;padding:7px 10px;font:inherit;font-size:13px;font-weight:700;background:var(--card);color:var(--sub);box-shadow:var(--shadow);margin-left:auto;margin-right:8px;white-space:nowrap}
 .gghost rect{opacity:.55}
+.gtop .hourglass{margin-left:auto}
+.btn.gpass{margin-top:10px;padding:14px 10px;font-size:17px;background:var(--card);color:var(--ink);border:2px solid var(--line);box-shadow:0 3px 0 var(--line)}
+.btn.gpass.go{background:#E9B52C;color:#3A1E12;border-color:#C3921A;box-shadow:0 4px 0 #C3921A}
+.gask{position:fixed;inset:0;z-index:80;background:rgba(20,14,30,.55);display:flex;align-items:center;justify-content:center;padding:20px;animation:gbgin .2s ease-out both}
+.gaskbox{background:var(--card);color:var(--ink);border-radius:22px;padding:22px 18px 16px;width:min(100%,380px);text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.gasktitle{font-size:22px;font-weight:900;margin-bottom:6px}
+.gaskbox p{font-size:15px;line-height:1.7;margin:6px 0 16px}
+.gaskbox .gaskstay{background:#E9B52C;color:#3A1E12;box-shadow:0 4px 0 #C3921A;font-size:19px;padding:15px;margin-bottom:10px}
+.gaskbox .gaskgo{font-size:15px}
 .gintro{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .45s}
 .gintro.out{opacity:0}
 .glogo{width:min(92vw,500px);animation:grise 1.9s cubic-bezier(.2,.8,.2,1) .5s both, gfloat 3s ease-in-out 2.4s infinite;
@@ -326,7 +335,7 @@ body.sandbox #app{padding-top:22px}
    ・英語の発音は問題データに入っている音声ファイルで再生（端末の読み上げは予備）
    ・問題データ（画像・音声つき）は IndexedDB、学習記録は localStorage
    ============================================================ */
-const APP_VER = "1.16.1";
+const APP_VER = "1.16.2";
 /* ---- プロフィール（中学生／小学生）。記録はプロフィールごとに別々に保存 ---- */
 const PKEY = "manadori:profiles";
 let PROF = { cur:"chu", momEmail:"", list:[ {id:"chu", name:"中学生", level:"中学", icon:"🎒"}, {id:"sho", name:"小学生", level:"小学", icon:"🐣"} ] };
@@ -1418,6 +1427,7 @@ function renderDone(){
         <div style="font-weight:700;color:var(--pri-deep)">${esc(answerText(x.q))}</div></div></div>`).join("")}</div>`:""}
     ${session.kaki?`<button class="btn sub" onclick="session=null;go('#mom')">👩 書いた字を おうちの人に 見てもらう（${session.kaki}こ）</button><div class="spacer"></div>`:""}
     <button class="btn" onclick="session=null;go('#home')">${esc(SUBJ)}のページへ</button>`;
+  { const g=gameData(); if(g.pause && (g.pause.date!==today() || (dayRec().n||0)>(g.pause.n||0))){ g.pause=null; save(); delete GAUTO[PROF.cur]; delete GAUTO[PROF.cur+":3"]; } }   // ✕でやめたあと、勉強をもう1回（問題を解いた）→ また遊べる
   autoGame(2200);
 }
 function answerText(q){
@@ -1711,13 +1721,15 @@ function gameStatus(){
   if(isDebug()) return {can:true, debug:true, q};
   const mode=gameMode();
   if(!mode) return {can:false, played:true, q};
+  if(gPaused()) return {can:false, paused:true, q, mode};
   return {can:q.done, q, mode};
 }
 
 /* ---- 自動でゲームを出す：その日のノルマを終えた瞬間（完了画面）か、続きがある日にアプリを開いたとき ---- */
 let GRET="#top";          // ゲームが終わったら戻る場所
 const GAUTO={};           // アプリを開いている間に、もう自動で出したか（プロフィールごと）
-function gameDue(){ return questState().done && !!gameMode(); }   // デバッグに関係なく、本当の条件
+function gPaused(){ const p=gameData().pause; return !!(p && p.date===today()); }   // ✕でやめた → 勉強をもう1回やるまで出ない
+function gameDue(){ return questState().done && !!gameMode() && !gPaused(); }   // デバッグに関係なく、本当の条件
 function gaKey(){ return PROF.cur+(gameMode()==="3d"?":3":""); }
 function autoGame(ms){
   if(GAUTO[gaKey()] || !gameDue()) return;
@@ -1805,14 +1817,13 @@ function gNext(){ if(GZ) clearInterval(GZ.tm); document.querySelectorAll(".gclea
 function renderPuzzle(){
   const P=GZ.puz, W=Math.min(app().clientWidth||360, 560);
   const H=window.innerHeight||760;   // スマホの見える高さに、わく＋ブロック置き場＋ボタンが収まる大きさ
-  const cs=Math.max(28, Math.min(52, Math.floor((W-16)/8.4), Math.floor((H-(GZ.debug?262:200))/(P.h+8))));
+  const cs=Math.max(28, Math.min(52, Math.floor((W-16)/8.4), Math.floor((H-(GZ.debug?322:260))/(P.h+8))));
   const bw=P.w*cs, bh=P.h*cs, bx=Math.round((W-bw)/2), by=14;
   const slotW=P.pieces.length>4?(W-16)/3:W/2, slotH=4*cs+6, ty=by+bh+28;
   GZ.cs=cs; GZ.bx=bx; GZ.by=by; GZ.ty=ty; GZ.slotW=slotW; GZ.slotH=slotH; GZ.W=W;
   const F=new Set(P.cells.map(c=>c.join(",")));
   let board=""; P.cells.forEach(([x,y])=>{ board+=`<rect x="${x*cs+1}" y="${y*cs+1}" width="${cs-2}" height="${cs-2}" rx="3" class="gcell"/>`; });
   app().innerHTML=`<div class="top gtop"><button class="back" onclick="gQuit()" aria-label="もどる">✕</button><h1>${esc(gameInfo().name)}${GZ.debug?' <span class="pill star">🛠</span>':""}</h1>
-      ${GZ.giveup?"":`<button class="ggive" id="ggive" onclick="gGiveUp()">🏳️ ギブアップ</button>`}
       <div class="hourglass" id="hg">${hourglassSVG(0)}<div class="hgt"><b id="hgs">${GZ.lim}</b><span id="hgm"></span></div></div></div>
     <div class="glayer" id="glayer" style="height:${ty+2*slotH+8}px">
       <div class="gboard" style="left:${bx-8}px;top:${by-8}px;width:${bw+16}px;height:${bh+16}px"></div>
@@ -1821,6 +1832,7 @@ function renderPuzzle(){
       ${P.pieces.map(id=>`<div class="gpiece" id="gp-${id}" data-id="${id}"></div>`).join("")}
     </div>
     <div class="gctrl"><button class="btn sub" onclick="gRotate()">↻ まわす</button><button class="btn sub" onclick="gFlip()">⇋ うらがえす</button></div>
+    ${GZ.giveup?"":`<button class="btn gpass" id="ggive" onclick="gGiveUp()">🏳️ パス（こたえを見る）</button>`}
     ${GZ.debug?`<button class="btn ghost" style="margin-top:8px" onclick="gNext()">🛠 次のゲームへ ⏭</button>`:""}
     <p class="hint" style="text-align:center" id="ghint">${GZ.giveup?"🏳️ うすい色のとおりに、同じ色のブロックをおいてみよう":"ブロックを指で動かして、白いわくにぴったり入れよう。ブロックをタップしてもまわせるよ。"}</p>`;
   P.pieces.forEach((id,i)=>{ drawPiece(id); if(!GZ.place[id]) toTray(id); else putAt(id,GZ.place[id][0],GZ.place[id][1]); bindPiece(id); });
@@ -1907,9 +1919,9 @@ function hourglassSVG(f){   // f：0（はじめ）→1（制限時間）
     <path d="M${17-9*Math.min(1,bot*1.1)} 40h${18*Math.min(1,bot*1.1)}c-2 -${9*bot} -6 -${10*bot} -9 -${11*bot}c-3 ${1*bot} -7 ${2*bot} -9 ${11*bot}z" fill="#E9B52C"/></svg>`;
 }
 /* ---- ギブアップ：正解の色と場所を、わくの中にうすく出す ---- */
-function gGiveUp(){
+async function gGiveUp(){
   if(!GZ||GZ.done||GZ.giveup) return;
-  if(!confirm("ギブアップする？\n答えが わくの中に うすく出るよ。\nそのとおりに おけばクリアだけど、ダイヤは もらえないよ。")) return;
+  if(!await gAsk({title:"パスする？", go:"🏳️ パスする", body:"答えが わくの中に うすく出るよ。<br>そのとおりに おけば おわりだけど、ダイヤは もらえないよ。"}) || !GZ || GZ.done || GZ.giveup) return;
   GZ.giveup=true; clearInterval(GZ.tm);
   if(!GZ.debug){ const g=gameData(); if(g.cur){ g.cur.giveup=true; save(); } }
   // 正解とちがう場所のブロックは置き場にもどす
@@ -1932,7 +1944,7 @@ function drawGhost(){
   }
   g.innerHTML=h;
 }
-function gFlag(){ const hg=$("#hg"); if(hg){ hg.classList.remove("over"); hg.innerHTML=`<div class="hgt" style="padding:4px 2px"><b style="font-size:22px">🏳️</b><span style="font-size:11px">ギブアップ</span></div>`; } }
+function gFlag(){ const hg=$("#hg"); if(hg){ hg.classList.remove("over"); hg.innerHTML=`<div class="hgt" style="padding:4px 2px"><b style="font-size:22px">🏳️</b><span style="font-size:11px">パス</span></div>`; } }
 
 function gCheck(){
   if(GZ.done || !GZ.puz.pieces.every(id=>GZ.place[id])) return;
@@ -1945,7 +1957,7 @@ function gCheck(){
   }
   const ov=document.createElement("div"); ov.className="gclear";
   ov.innerHTML=`<div class="gcbox"><div class="gctitle">クリア！</div>${GZ.giveup?`<div class="gctime">🏳️ 答えを見てクリア</div>`:`<div class="gctime">${(Math.round(t*10)/10).toFixed(1)}秒</div>`}
-    ${GZ.giveup?`<p><b>ギブアップしたので、ダイヤはなし</b><br><span class="muted">つぎは 自分の力で ぴったりを めざそう！</span></p>`:gem?`<div class="gcgem">${gemSVG(gem.c,96)}</div><p><b>${gem.name}のダイヤ ゲット！</b></p>`:`<p><b>${GZ.lim}秒をこえたので、ダイヤはなし…</b><br><span class="muted">つぎは${GZ.lim}秒以内をめざそう！</span></p>`}
+    ${GZ.giveup?`<p><b>パスしたので、ダイヤはなし</b><br><span class="muted">つぎは 自分の力で ぴったりを めざそう！</span></p>`:gem?`<div class="gcgem">${gemSVG(gem.c,96)}</div><p><b>${gem.name}のダイヤ ゲット！</b></p>`:`<p><b>${GZ.lim}秒をこえたので、ダイヤはなし…</b><br><span class="muted">つぎは${GZ.lim}秒以内をめざそう！</span></p>`}
     ${GZ.debug?`<p class="muted">🛠 デバッグモード：ダイヤは記録されません</p>`:""}
     ${gemShelf(gameData(),false)}
     ${GZ.debug?`<button class="btn" onclick="gNext()">🛠 次のゲームへ ⏭</button><div class="spacer"></div>`
@@ -1960,8 +1972,23 @@ function gBack(b){
   const dbg=GZ&&GZ.debug; b.closest('.gclear').remove(); GZ=null; go(GRET||'#top');
   if(!dbg && gameMode()==="3d") autoGame(1300);
 }
-function gQuit(){
-  if(GZ && !GZ.done && !GZ.debug && !confirm("やめますか？\nクリアするか ギブアップするまで、つぎも このパズルの続きが出ます。\n（時間は止まらずに進みます）")) return;
+/* ゲーム中の「ほんとうに？」の確認（大きいボタン。まちがえて押しても、まず「つづける」が目立つ） */
+function gAsk(o){
+  return new Promise(res=>{
+    document.querySelectorAll(".gask").forEach(x=>x.remove());
+    const ov=document.createElement("div"); ov.className="gask";
+    ov.innerHTML=`<div class="gaskbox"><div class="gasktitle">${o.title}</div><p>${o.body}</p>
+      <button class="btn gaskstay">▶ つづける</button><button class="btn ghost gaskgo">${o.go}</button></div>`;
+    const end=v=>{ ov.remove(); res(v); };
+    ov.querySelector(".gaskstay").onclick=()=>end(false); ov.querySelector(".gaskgo").onclick=()=>end(true);
+    ov.onclick=e=>{ if(e.target===ov) end(false); };
+    document.body.appendChild(ov);
+  });
+}
+const QUIT_MSG = {title:"ゲームを やめる？", go:"やめる",
+  body:`やめると、今日のゲームは ここで おしまい。<br><b>もう一度 あそぶには、べんきょうを もう1回 やってね。</b><br><span class="muted">（そのときは このパズルの つづきから。時間は 止まらずに 進むよ）</span>`};
+async function gQuit(){
+  if(GZ && !GZ.done && !GZ.debug){ if(!await gAsk(QUIT_MSG) || !GZ) return; const g=gameData(); g.pause={date:today(), n:dayRec().n||0}; save(); }
   if(GZ) clearInterval(GZ.tm); GZ=null; go(GRET||"#top");
 }
 /* ============================================================
@@ -2116,17 +2143,17 @@ function renderPuzzle3(){
   const P=G3.puz, [X,Y,Z]=P.dims, W=Math.min(app().clientWidth||360, 560), H=window.innerHeight||760;
   const cs=getComputedStyle(app()), inW=W-(parseFloat(cs.paddingLeft)||0)-(parseFloat(cs.paddingRight)||0);
   const k=P.pieces.length, cols=k<=4?k:3, rows=Math.ceil(k/cols), slot=Math.min(92, Math.floor((inW-6*(cols-1))/cols)-4);
-  const BW=W, BH=Math.max(230, Math.min(Math.round(W*0.92), H-(G3.debug?330:276)-rows*(slot+6)));
+  const BW=W, BH=Math.max(230, Math.min(Math.round(W*0.92), H-(G3.debug?390:336)-rows*(slot+6)));
   G3.BW=BW; G3.BH=BH; G3.slot=slot;
   const lay=[...Array(Z).keys()].map(i=>`<button class="g3chip ${G3.layer===i+1?"on":""}" onclick="g3Layer(${i+1})">${i+1}段目</button>`).join("")+`<button class="g3chip ${!G3.layer?"on":""}" onclick="g3Layer(0)">全部</button>`;
   app().innerHTML=`<div class="top gtop"><button class="back" onclick="g3Quit()" aria-label="もどる">✕</button><h1>${esc(g3Name())}${G3.debug?' <span class="pill star">🛠</span>':""}</h1>
-      ${G3.giveup?`<button class="ggive" onclick="g3Finish()">おわる ▶</button>`:`<button class="ggive" id="ggive" onclick="g3GiveUp()">🏳️ パス</button>`}
       <div class="hourglass" id="hg">${hourglassSVG(0)}<div class="hgt"><b>${G3.lim}</b><span></span></div></div></div>
     <div class="g3board" style="height:${BH}px"><canvas id="g3c"></canvas>
       <div class="g3lay">${lay}</div>
       <button class="g3rot l" onclick="g3Turn(-1)" aria-label="左に回す">⟲</button><button class="g3rot r" onclick="g3Turn(1)" aria-label="右に回す">⟳</button></div>
     <div class="g3tray" style="grid-template-columns:repeat(${cols},1fr)">${P.pieces.map(p=>`<button class="g3slot" id="g3s-${p.id}" style="height:${slot}px" onclick="g3Pick('${p.id}')"><canvas></canvas><span></span></button>`).join("")}</div>
     <div class="gctrl g3ctrl">${G3.giveup?"":`<button class="btn sub" onclick="g3Rot('z')"><i>↻</i>よこに回す</button><button class="btn sub" onclick="g3Rot('x')"><i>⤵</i>たてに回す</button><button class="btn sub" onclick="g3Rot('y')"><i>⟳</i>ひねる</button><button class="btn" id="g3put" onclick="g3Put()"><i>✔</i>おく</button>`}</div>
+    ${G3.giveup?`<button class="btn gpass go" id="g3end" onclick="g3Finish()">おわる ▶</button>`:`<button class="btn gpass" id="ggive" onclick="g3GiveUp()">🏳️ パス（こたえを見る）</button>`}
     ${G3.debug?`<button class="btn ghost" style="margin-top:8px" onclick="g3Next()">🛠 次のゲームへ ⏭（${X}×${Y}×${Z}・${k}こ）</button>`:""}
     <p class="hint" style="text-align:center" id="ghint">${G3.giveup?"🏳️ これがこたえ。段のボタンで中も見られるよ":"ブロックを選んで、置きたい場所をタップ。うすい影の所に「おく」。<br>もう一度タップしても置けるよ。えらびにくい所は ⟲⟳ で箱を回してね。"}</p>`;
   g3Bind(); g3Paint(); g3PaintTray();
@@ -2224,9 +2251,9 @@ function g3Tick(){
   $("#hg").innerHTML=hourglassSVG(Math.min(1,t/G3.lim))+`<div class="hgt"><b>${left>0?Math.ceil(left):"0"}</b><span>${g?gemSVG(g.c,16):"⏰"}</span></div>`;
   $("#hg").classList.toggle("over", t>G3.lim);
 }
-function g3GiveUp(){
+async function g3GiveUp(){
   if(!G3||G3.done||G3.giveup) return;
-  if(!confirm("パスする？\nこたえを見て、このパズルはおわりになるよ。\nダイヤは もらえないよ。")) return;
+  if(!await gAsk({title:"パスする？", go:"🏳️ パスする", body:"こたえを見て、このパズルは おわりになるよ。<br>ダイヤは もらえないよ。"}) || !G3 || G3.done || G3.giveup) return;
   G3.giveup=true; clearInterval(G3.tm); G3.sel=null; G3.ghost=null; G3.layer=0;
   if(!G3.debug){ const g=gameData(); if(g.cur3){ g.cur3.giveup=true; save(); } }
   renderPuzzle3();
@@ -2257,9 +2284,9 @@ function g3Done(){
 }
 let G3DBG_LV=0;
 function g3Next(){ if(G3) clearInterval(G3.tm); document.querySelectorAll(".gclear").forEach(x=>x.remove()); if(G3&&G3.debug) G3DBG_LV++; G3=null; startPuzzle3(); }
-function g3Quit(){
-  if(G3 && !G3.done && !G3.debug && !G3.giveup && !confirm("やめますか？\nクリアするか パスするまで、つぎも このパズルの続きが出ます。\n（時間は止まらずに進みます）")) return;
+async function g3Quit(){
   if(G3 && G3.giveup && !G3.done && !G3.debug){ g3Done(); return; }
+  if(G3 && !G3.done && !G3.debug){ if(!await gAsk(QUIT_MSG) || !G3) return; const g=gameData(); g.pause={date:today(), n:dayRec().n||0}; save(); }
   if(G3) clearInterval(G3.tm); G3=null; go(GRET||"#top");
 }
 
